@@ -1,4 +1,6 @@
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+// The Supabase client ships with the app (vendor/supabase.umd.js, loaded as a
+// classic script) so the whole game runs with no external requests at all.
+const { createClient } = window.supabase;
 
 // Supabase URL and publishable key are intended for browser use. RLS is the security boundary.
 const SUPABASE_URL = 'https://ouihbvxevslmuvkzgchr.supabase.co';

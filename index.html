@@ -11,10 +11,11 @@
 <title>فكسب · SMART CITY 8.2</title>
 <script type="importmap">
 {"imports":{
-  "three":"https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js",
-  "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.1/examples/jsm/"
+  "three":"./vendor/three.module.js",
+  "three/addons/":"./vendor/"
 }}
 </script>
+<script src="./vendor/supabase.umd.js"></script>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -1327,7 +1328,7 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
  function building(x,z,h,w,d,color,idx){const mat=new THREE.MeshStandardMaterial({color,roughness:.72,metalness:.12});const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);mesh.position.set(x,h/2,z);mesh.castShadow=true;mesh.receiveShadow=true;mesh.userData={plot:idx,name:'عقار '+(idx+1),height:h};scene.add(mesh);const roof=new THREE.Mesh(new THREE.BoxGeometry(w+.12,.22,d+.12),new THREE.MeshStandardMaterial({color:0x26384b,roughness:.8}));roof.position.set(x,h+.1,z);roof.castShadow=true;scene.add(roof);
   const winMat=new THREE.MeshStandardMaterial({color:0x9ddcff,emissive:0x193d5c,metalness:.4,roughness:.25});for(let y=2.2;y<h-1;y+=2.5){for(let xx=-w/2+1;xx<w/2-.3;xx+=2){for(const side of [-1,1]){const win=new THREE.Mesh(new THREE.BoxGeometry(.85,.95,.07),winMat);win.position.set(x+xx,y,z+side*(d/2+.045));scene.add(win);}}}return mesh;}
  function car(x,z,color,axis){const g=new THREE.Group();const body=new THREE.Mesh(new THREE.BoxGeometry(2.1,.65,1.05),new THREE.MeshStandardMaterial({color,metalness:.45,roughness:.35}));body.position.y=.55;g.add(body);const cabin=new THREE.Mesh(new THREE.BoxGeometry(1.05,.48,.9),new THREE.MeshStandardMaterial({color:0x9ec8df,metalness:.55,roughness:.2}));cabin.position.set(-.15,1.05,0);g.add(cabin);g.position.set(x,.15,z);g.userData.axis=axis;scene.add(g);return g;}
- async function init(){try{const [T,O]=await Promise.all([import('https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js'),import('https://cdn.jsdelivr.net/npm/three@0.160.1/examples/jsm/controls/OrbitControls.js')]);THREE=T;const OrbitControls=O.OrbitControls;
+ async function init(){try{const [T,O]=await Promise.all([import('./vendor/three.module.js'),import('./vendor/OrbitControls.js')]);THREE=T;const OrbitControls=O.OrbitControls;
   scene=new THREE.Scene();scene.background=new THREE.Color(0x9bc8e8);scene.fog=new THREE.Fog(0x9bc8e8,95,230);
   camera=new THREE.PerspectiveCamera(48,1,.1,500);camera.position.set(42,43,54);
   renderer=new THREE.WebGLRenderer({antialias:true,alpha:false});renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.7));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.outputColorSpace=THREE.SRGBColorSpace;root.replaceChildren(renderer.domElement);
