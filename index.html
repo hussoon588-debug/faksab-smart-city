@@ -1,0 +1,1100 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#050d1f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="description" content="فكسب سمارت سيتي — لعبة بناء وإدارة مدينة عقارية">
+<title>فكسب · SMART CITY</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+@font-face{font-family:'Cairo';font-style:normal;font-weight:200 1000;font-display:swap;
+  src:url(data:font/woff2;base64,__FONT_AR__) format('woff2');
+  unicode-range:U+0600-06FF,U+0750-077F,U+0870-088E,U+0890-0891,U+0898-08E1,U+08E3-08FF,U+200C-200E,U+2010-2011,U+204F,U+2E41,U+FB50-FDFF,U+FE70-FE74,U+FE76-FEFC;}
+@font-face{font-family:'Cairo';font-style:normal;font-weight:200 1000;font-display:swap;
+  src:url(data:font/woff2;base64,__FONT_LA__) format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;}
+:root{
+  --navy-950:#050d1f;--navy-900:#081633;--navy-850:#0b1d40;--navy-800:#10254f;--navy-700:#173263;
+  --gold:#ffd24a;--gold-2:#f2a93b;--gold-dim:#b9852a;--cyan:#3ad6ff;--green:#33e08c;--purple:#8a6bff;--red:#ff5c6c;
+  --line:rgba(255,210,74,.22);--txt:#eaf1ff;--muted:#9cb1d4;--radius:18px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  margin:0;font-family:'Cairo',system-ui,-apple-system,'Segoe UI',sans-serif;
+  background:
+    radial-gradient(900px 500px at 78% -10%, rgba(58,214,255,.13), transparent 62%),
+    radial-gradient(700px 520px at 12% 0%, rgba(255,210,74,.10), transparent 58%),
+    linear-gradient(180deg,#040a18 0%, #07142e 42%, #050d1f 100%);
+  color:var(--txt);min-height:100vh;display:flex;justify-content:center;align-items:flex-start;
+  overflow-x:hidden;overscroll-behavior-y:none;
+}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:repeating-linear-gradient(0deg, rgba(255,255,255,.016) 0 1px, transparent 1px 3px);
+  mix-blend-mode:overlay;opacity:.6}
+.app{width:100%;max-width:460px;position:relative;z-index:1;padding:10px 12px calc(134px + env(safe-area-inset-bottom))}
+
+/* top bar */
+.topbar{display:flex;align-items:center;gap:10px;margin:4px 0 12px}
+.lvl-ring{position:relative;width:62px;height:62px;flex:0 0 62px;border-radius:50%;
+  background:conic-gradient(var(--gold) calc(var(--p,0)*1%), rgba(255,255,255,.08) 0);
+  display:grid;place-items:center;box-shadow:0 0 24px rgba(255,210,74,.22)}
+.lvl-ring::before{content:"";position:absolute;inset:4px;border-radius:50%;
+  background:radial-gradient(circle at 50% 30%,#12295a,#07142e 70%);border:1px solid rgba(255,210,74,.35)}
+.lvl-num{position:relative;font-weight:900;font-size:19px;color:var(--gold);line-height:1.05}
+.lvl-cap{position:relative;font-size:7.5px;color:var(--muted);margin-top:1px;line-height:1;letter-spacing:0}
+.xp-block{flex:1;min-width:0}
+.xp-title{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:11px;color:var(--muted);margin-bottom:5px}
+.xp-title>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.xp-title>span:last-child{white-space:nowrap;flex:0 0 auto}
+.xp-title b{color:var(--txt);font-weight:700}
+.xp-bar{height:8px;border-radius:99px;background:rgba(255,255,255,.07);overflow:hidden;border:1px solid rgba(255,255,255,.06)}
+.xp-fill{height:100%;width:0%;border-radius:99px;background:linear-gradient(90deg,var(--gold-2),var(--gold),#fff3c4);
+  box-shadow:0 0 12px rgba(255,210,74,.6);transition:width .5s cubic-bezier(.2,.8,.2,1)}
+.coin-pill{display:flex;align-items:center;gap:7px;padding:8px 13px 8px 11px;border-radius:99px;
+  background:linear-gradient(180deg,rgba(255,210,74,.16),rgba(255,210,74,.05));
+  border:1px solid rgba(255,210,74,.42);box-shadow:inset 0 1px 0 rgba(255,255,255,.14), 0 6px 18px rgba(0,0,0,.35);
+  font-weight:900;font-size:14px;color:var(--gold);white-space:nowrap}
+.coin-ico{width:16px;height:16px;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,#fff5c0,#ffd24a 45%,#b9852a 100%);box-shadow:0 0 8px rgba(255,210,74,.7)}
+
+/* hero */
+.hero{position:relative;border-radius:22px;overflow:hidden;margin-bottom:14px;border:1px solid var(--line);
+  box-shadow:0 18px 40px rgba(0,0,0,.5), inset 0 0 60px rgba(58,214,255,.06);
+  background:linear-gradient(180deg,#0a1f48 0%, #123a72 45%, #0a1a3a 100%);min-height:186px}
+.hero svg.sky{position:absolute;inset:0;width:100%;height:100%;display:block}
+.hero-veil{position:absolute;inset:0;background:linear-gradient(180deg,rgba(4,10,24,.72) 0%,rgba(4,10,24,.12) 42%,rgba(4,10,24,.86) 100%)}
+.hero-body{position:relative;padding:16px 18px 14px;text-align:center}
+.logo-fa{font-size:34px;font-weight:900;line-height:1.4;padding:2px 0 4px;letter-spacing:0;
+  background:linear-gradient(180deg,#fff8d2 0%,#ffd24a 42%,#c98f22 100%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 2px 0 rgba(0,0,0,.45)) drop-shadow(0 0 18px rgba(255,210,74,.35))}
+.logo-en{font-size:15px;font-weight:900;letter-spacing:5px;color:#7ee8ff;margin-top:2px;text-shadow:0 0 14px rgba(58,214,255,.65)}
+.logo-sub{font-size:11.5px;color:#e6efff;margin-top:6px;letter-spacing:0;text-shadow:0 1px 6px rgba(0,0,0,.6)}
+.hero-stats{display:flex;gap:8px;margin-top:14px}
+.hstat{flex:1;background:rgba(4,10,24,.55);border:1px solid rgba(126,232,255,.16);border-radius:12px;padding:7px 6px;backdrop-filter:blur(6px)}
+.hstat b{display:block;font-size:15px;font-weight:900;color:var(--gold)}
+.hstat span{font-size:10px;color:#b7c9e8}
+.gear{position:absolute;top:10px;left:10px;z-index:5;width:34px;height:34px;border-radius:11px;border:1px solid rgba(126,232,255,.22);
+  background:rgba(4,10,24,.55);display:grid;place-items:center;cursor:pointer;backdrop-filter:blur(6px)}
+.gear svg{width:17px;height:17px;stroke:#cfe3ff;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+/* tabs */
+.tabs{position:fixed;bottom:0;left:0;right:0;z-index:40;display:flex;justify-content:center;
+  padding:8px 12px calc(8px + env(safe-area-inset-bottom));
+  background:linear-gradient(180deg,rgba(5,13,31,0),rgba(5,13,31,.92) 32%,#050d1f 100%)}
+.tabs-inner{display:flex;gap:6px;width:100%;max-width:460px;background:rgba(10,26,58,.92);border:1px solid var(--line);
+  border-radius:18px;padding:6px;backdrop-filter:blur(14px);box-shadow:0 12px 32px rgba(0,0,0,.6)}
+.tab{flex:1;height:52px;border:0;background:transparent;color:var(--muted);font-family:inherit;font-size:10.5px;font-weight:700;
+  padding:0 2px;border-radius:13px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;transition:.2s}
+.tab svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.tab.active{color:#0a1a3a;background:linear-gradient(180deg,#ffe07a,#f2a93b);box-shadow:0 6px 16px rgba(242,169,59,.35), inset 0 1px 0 rgba(255,255,255,.5)}
+.tab.active svg{stroke:#0a1a3a}
+
+/* panels */
+.panel{background:linear-gradient(180deg,rgba(16,37,79,.92),rgba(8,22,51,.95));border:1px solid var(--line);border-radius:var(--radius);
+  padding:14px;margin-bottom:12px;box-shadow:0 10px 28px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.05)}
+.phead{display:flex;align-items:center;justify-content:space-between;margin-bottom:11px}
+.ptitle{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:900;color:var(--gold)}
+.ptitle .dot{width:7px;height:7px;border-radius:50%;background:var(--gold);box-shadow:0 0 10px var(--gold)}
+.pmeta{font-size:11.5px;color:#b6c8e6}
+
+/* city map */
+.city{position:relative;padding:14px;border-radius:16px;overflow:hidden;
+  background:radial-gradient(120% 100% at 50% 0%,#1b2534 0%,#101722 60%,#0b111a 100%);
+  border:1px solid rgba(255,255,255,.07);box-shadow:inset 0 0 40px rgba(0,0,0,.55)}
+.map{position:relative;z-index:2;display:grid;grid-template-columns:repeat(5,1fr);gap:14px}
+.roads{position:absolute;inset:0;z-index:1;pointer-events:none}
+.road{position:absolute;background:#232d3a;box-shadow:inset 0 0 6px rgba(0,0,0,.55)}
+.road.vr{border-left:1px solid rgba(255,255,255,.05);border-right:1px solid rgba(255,255,255,.05)}
+.road.hr{border-top:1px solid rgba(255,255,255,.05);border-bottom:1px solid rgba(255,255,255,.05)}
+.road.vr::after{content:'';position:absolute;left:50%;top:6px;bottom:6px;width:1px;transform:translateX(-50%);
+  background:repeating-linear-gradient(to bottom,rgba(255,210,74,.55) 0 7px,transparent 7px 16px)}
+.road.hr::after{content:'';position:absolute;top:50%;left:6px;right:6px;height:1px;transform:translateY(-50%);
+  background:repeating-linear-gradient(to right,rgba(255,210,74,.55) 0 7px,transparent 7px 16px)}
+.car{position:absolute;border-radius:2px;z-index:3;
+  background:linear-gradient(180deg,#f4f7ff,#c6d0e2);
+  box-shadow:0 0 6px rgba(120,190,255,.55), 0 1px 2px rgba(0,0,0,.6)}
+.car::before{content:'';position:absolute;background:#ffd257;border-radius:1px;box-shadow:0 0 5px #ffd257}
+.car.hc{width:11px;height:5px;top:50%;margin-top:-2.5px;animation-name:driveX;animation-timing-function:linear;animation-iteration-count:infinite}
+.car.hc::before{width:2px;height:3px;right:0;top:1px}
+.car.vc{width:5px;height:11px;left:50%;margin-left:-2.5px;animation-name:driveY;animation-timing-function:linear;animation-iteration-count:infinite}
+.car.vc::before{width:3px;height:2px;left:1px;bottom:0}
+@keyframes driveX{from{left:-16px}to{left:100%}}
+@keyframes driveY{from{top:-16px}to{top:100%}}
+.plot .pricebadge{position:absolute;bottom:3px;left:50%;transform:translateX(-50%);font-size:8px;font-weight:900;
+  color:var(--gold);background:rgba(10,22,44,.85);border:1px solid rgba(255,210,74,.35);border-radius:5px;padding:0 4px;line-height:1.6}
+.plot{position:relative;aspect-ratio:1;border-radius:11px;padding:0;cursor:pointer;display:grid;place-items:center;overflow:hidden;
+  border:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.03);transition:transform .15s, box-shadow .2s}
+.plot:active{transform:scale(.94)}
+.plot svg{width:90%;height:90%;display:block;filter:drop-shadow(0 3px 5px rgba(0,0,0,.45))}
+.plot.built{background:linear-gradient(180deg,rgba(24,64,52,.75),rgba(8,24,20,.85));border-color:rgba(51,224,140,.32);box-shadow:inset 0 0 14px rgba(51,224,140,.12)}
+.plot.empty{border:1.5px dashed rgba(255,210,74,.5);background:rgba(255,210,74,.055);color:var(--gold)}
+.plot.empty svg{width:20px;height:20px;stroke:var(--gold);fill:none;stroke-width:1.6;opacity:.9}
+.plot.free{border:1px dashed rgba(255,255,255,.11);color:rgba(255,255,255,.16);background:rgba(255,255,255,.018)}
+.plot.free svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.6}
+.plot .rdy{position:absolute;top:4px;right:4px;width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 9px var(--green)}
+.plot .lvlbadge{position:absolute;bottom:2px;left:3px;font-size:8.5px;font-weight:900;color:#0a1a3a;background:var(--gold);
+  border-radius:5px;padding:0 4px;line-height:1.5}
+
+/* summary cards */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+#buildGrid .card{padding:10px 6px}
+#buildGrid .card .art{height:62px;margin-bottom:4px}
+#buildGrid .card .art svg{max-width:82px}
+#buildGrid .card h4{font-size:11px}
+#buildGrid .card .price{font-size:9.5px}
+#buildGrid .btn{padding:8px 4px;font-size:10.5px;border-radius:10px}
+#buildGrid .card .lock{font-size:8px;padding:2px 5px;top:6px;left:6px}
+.ic svg{width:17px;height:17px;stroke:var(--gold);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card{background:linear-gradient(180deg,rgba(23,50,99,.9),rgba(10,26,58,.92));border:1px solid rgba(126,232,255,.12);
+  border-radius:16px;padding:12px 10px;text-align:center;transition:transform .18s, border-color .18s;position:relative;overflow:hidden}
+.card:active{transform:scale(.98)}
+.card .art{height:74px;display:grid;place-items:center;margin-bottom:6px}
+.card .art svg{width:100%;max-width:110px;height:auto;filter:drop-shadow(0 8px 14px rgba(0,0,0,.45))}
+.card h4{margin:0;font-size:12.5px;font-weight:800}
+.card .price{font-size:11px;color:var(--gold);font-weight:800;margin-top:2px}
+.card .lock{position:absolute;top:8px;left:8px;font-size:9px;background:rgba(255,92,108,.16);border:1px solid rgba(255,92,108,.4);
+  color:#ff98a3;padding:2px 7px;border-radius:99px;font-weight:800}
+.card.locked{opacity:.55}
+.card.locked .art{filter:grayscale(.7)}
+.stat{background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:11px 8px;text-align:center}
+.stat b{display:block;font-size:16px;font-weight:900;color:var(--gold);line-height:1.2}
+.stat span{font-size:10.5px;color:var(--muted)}
+
+/* buttons */
+.btn{border:0;font-family:inherit;font-weight:800;font-size:13px;border-radius:13px;padding:13px 16px;cursor:pointer;width:100%;
+  transition:transform .15s, filter .15s;position:relative}
+.btn:active{transform:scale(.985)}
+.btn-gold{background:linear-gradient(180deg,#ffe07a,#f2a93b);color:#0a1a3a;box-shadow:0 8px 22px rgba(242,169,59,.32), inset 0 1px 0 rgba(255,255,255,.55)}
+.btn-ghost{background:rgba(255,255,255,.05);color:var(--txt);border:1px solid rgba(126,232,255,.22)}
+.btn-green{background:linear-gradient(180deg,#5cf0a8,#1fbf6f);color:#04240f;box-shadow:0 8px 22px rgba(31,191,111,.28)}
+.btn-red{background:rgba(255,92,108,.14);color:#ff98a3;border:1px solid rgba(255,92,108,.4)}
+.btn:disabled{opacity:.45;filter:grayscale(.4);cursor:not-allowed;transform:none}
+.btn.sm{padding:9px 12px;font-size:11.5px;border-radius:11px;width:auto}
+
+/* lists */
+.row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+.row:last-child{border-bottom:0}
+.row .ic{width:34px;height:34px;flex:0 0 34px;border-radius:10px;display:grid;place-items:center;
+  background:rgba(255,210,74,.1);border:1px solid rgba(255,210,74,.22);font-size:15px}
+.row .tx{flex:1;min-width:0}
+.row .tx b{display:block;font-size:12.5px;font-weight:800}
+.row .tx span{font-size:11px;color:var(--muted)}
+.row .val{font-size:12px;font-weight:900;color:var(--gold);white-space:nowrap}
+.row.ach .ic{background:rgba(138,107,255,.12);border-color:rgba(138,107,255,.3)}
+.row.ach .ic svg{stroke:var(--purple)}
+.row.ach.done .ic{background:rgba(51,224,140,.12);border-color:rgba(51,224,140,.35)}
+.row.ach.done .ic svg{stroke:var(--green)}
+
+/* ladder */
+.ladder{display:flex;flex-direction:column;gap:6px}
+.lrow{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:12px;background:rgba(255,255,255,.035);
+  border:1px solid rgba(255,255,255,.055);font-size:11.5px}
+.lrow.cur{background:linear-gradient(90deg,rgba(255,210,74,.18),rgba(255,210,74,.04));border-color:rgba(255,210,74,.45)}
+.lrow .n{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font-weight:900;font-size:11px;
+  background:rgba(255,255,255,.07);flex:0 0 26px}
+.lrow.cur .n{background:linear-gradient(180deg,#ffe07a,#f2a93b);color:#0a1a3a}
+.lrow .nm{flex:1;font-weight:700;color:var(--txt)}
+.lrow .xp{font-size:10px;color:var(--muted);white-space:nowrap}
+
+/* toast */
+#toast{position:fixed;top:14px;left:50%;transform:translate(-50%,-140%);z-index:90;max-width:420px;
+  background:linear-gradient(180deg,#173263,#0b1d40);border:1px solid rgba(255,210,74,.5);color:var(--txt);
+  padding:11px 18px;border-radius:14px;font-size:12.5px;font-weight:700;box-shadow:0 14px 34px rgba(0,0,0,.55);
+  transition:transform .35s cubic-bezier(.2,.9,.2,1);pointer-events:none;text-align:center}
+#toast.show{transform:translate(-50%,0)}
+#toast.ok{border-color:rgba(51,224,140,.6)}
+#toast.bad{border-color:rgba(255,92,108,.6)}
+
+/* modal / sheet */
+#modal{position:fixed;inset:0;z-index:80;display:none;align-items:flex-end;justify-content:center;
+  background:rgba(2,6,16,.72);backdrop-filter:blur(4px)}
+#modal.show{display:flex}
+.sheet{width:100%;max-width:460px;background:linear-gradient(180deg,#10254f,#081633);border:1px solid var(--line);
+  border-radius:24px 24px 0 0;padding:18px 16px calc(20px + env(safe-area-inset-bottom));animation:up .3s cubic-bezier(.2,.9,.2,1);
+  max-height:88vh;overflow-y:auto}
+@keyframes up{from{transform:translateY(40px);opacity:.4}to{transform:none;opacity:1}}
+.sheet h3{margin:0 0 4px;font-size:16px;font-weight:900;color:var(--gold);text-align:center}
+.sheet p{margin:0 0 14px;font-size:12px;color:var(--muted);text-align:center;line-height:1.8}
+.sheet .art{display:grid;place-items:center;margin:4px 0 10px}
+.sheet .art svg{width:130px;height:auto;filter:drop-shadow(0 10px 18px rgba(0,0,0,.5))}
+.sheet .kv{display:flex;justify-content:space-between;font-size:12px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+.sheet .kv:last-of-type{border-bottom:0}
+.sheet .kv b{color:var(--gold);font-weight:900}
+
+.empty{text-align:center;padding:18px 10px;color:var(--muted);font-size:12px;line-height:1.9}
+.view{display:none;animation:fade .28s ease}
+.view.active{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.tag{font-size:10px;padding:3px 8px;border-radius:99px;font-weight:800;border:1px solid transparent;white-space:nowrap}
+.tag.g{background:rgba(51,224,140,.12);color:#6bf0b3;border-color:rgba(51,224,140,.35)}
+.tag.y{background:rgba(255,210,74,.12);color:var(--gold);border-color:rgba(255,210,74,.35)}
+.tag.b{background:rgba(58,214,255,.12);color:#7ee8ff;border-color:rgba(58,214,255,.35)}
+.tag.p{background:rgba(138,107,255,.14);color:#b9a6ff;border-color:rgba(138,107,255,.35)}
+
+/* tutorial */
+#tour{position:fixed;inset:0;z-index:85;display:none;align-items:center;justify-content:center;padding:22px;
+  background:rgba(2,6,16,.86);backdrop-filter:blur(6px)}
+#tour.show{display:flex}
+.tour-card{width:100%;max-width:380px;background:linear-gradient(180deg,#122a58,#081633);border:1px solid var(--line);
+  border-radius:22px;padding:22px 18px;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.6)}
+.tour-card .tart{width:64px;height:64px;margin:0 auto 12px;border-radius:20px;display:grid;place-items:center;
+  background:linear-gradient(180deg,rgba(255,210,74,.18),rgba(255,210,74,.05));border:1px solid rgba(255,210,74,.4)}
+.tour-card .tart svg{width:30px;height:30px;stroke:var(--gold);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.tour-card h2{margin:0 0 8px;font-size:17px;font-weight:900;color:var(--gold)}
+.tour-card p{margin:0 0 16px;font-size:12.5px;color:#c7d8f2;line-height:1.9}
+.dots{display:flex;gap:6px;justify-content:center;margin-bottom:14px}
+.dots i{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.18)}
+.dots i.on{background:var(--gold);box-shadow:0 0 8px var(--gold)}
+.tour-skip{background:none;border:0;color:var(--muted);font-family:inherit;font-size:11.5px;margin-top:10px;cursor:pointer}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="lvl-ring" id="lvlRing" style="--p:0">
+      <div class="lvl-num" id="lvlNum">1</div>
+      <div class="lvl-cap">مستوى</div>
+    </div>
+    <div class="xp-block">
+      <div class="xp-title"><span id="lvlName">وافد جديد</span><span dir="ltr" style="font-variant-numeric:tabular-nums"><b id="xpNow">0</b> / <span id="xpNext">1,000</span></span></div>
+      <div class="xp-bar"><div class="xp-fill" id="xpFill"></div></div>
+    </div>
+    <div class="coin-pill"><span class="coin-ico"></span><span id="coinVal">2,500</span></div>
+  </div>
+
+  <!-- HERO -->
+  <div class="hero">
+    <svg class="sky" viewBox="0 0 460 190" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+      <defs>
+        <linearGradient id="b1" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#2a5aa8" stop-opacity=".85"/><stop offset="1" stop-color="#0a1a3a" stop-opacity=".2"/>
+        </linearGradient>
+        <linearGradient id="b2" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#7ee8ff" stop-opacity=".55"/><stop offset="1" stop-color="#0a1a3a" stop-opacity="0"/>
+        </linearGradient>
+        <linearGradient id="glow" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#5fe0a8" stop-opacity=".18"/><stop offset="1" stop-color="#0a1a3a" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <circle cx="390" cy="30" r="34" fill="#ffd24a" opacity=".10"/>
+      <circle cx="390" cy="30" r="20" fill="#ffd24a" opacity=".10"/>
+      <g fill="url(#b1)">
+        <rect x="6" y="86" width="26" height="104" rx="3"/><rect x="36" y="60" width="34" height="130" rx="3"/>
+        <rect x="74" y="100" width="22" height="90" rx="3"/><rect x="100" y="46" width="30" height="144" rx="3"/>
+        <rect x="134" y="80" width="26" height="110" rx="3"/><rect x="164" y="62" width="40" height="128" rx="3"/>
+        <rect x="208" y="94" width="22" height="96" rx="3"/><rect x="234" y="52" width="32" height="138" rx="3"/>
+        <rect x="270" y="78" width="26" height="112" rx="3"/><rect x="300" y="40" width="34" height="150" rx="3"/>
+        <rect x="338" y="86" width="24" height="104" rx="3"/><rect x="366" y="66" width="30" height="124" rx="3"/>
+        <rect x="400" y="96" width="26" height="94" rx="3"/><rect x="430" y="72" width="26" height="118" rx="3"/>
+      </g>
+      <g fill="url(#b2)" opacity=".7">
+        <rect x="104" y="56" width="22" height="2" rx="1"/><rect x="104" y="70" width="22" height="2" rx="1"/>
+        <rect x="238" y="62" width="24" height="2" rx="1"/><rect x="238" y="78" width="24" height="2" rx="1"/>
+        <rect x="304" y="50" width="26" height="2" rx="1"/><rect x="304" y="64" width="26" height="2" rx="1"/>
+        <rect x="370" y="76" width="22" height="2" rx="1"/>
+      </g>
+      <path d="M0 168 Q 60 150 120 164 T 240 160 T 360 166 T 460 158 L460 190 L0 190 Z" fill="url(#glow)"/>
+    </svg>
+    <div class="hero-veil"></div>
+    <div class="gear" onclick="openSettings()" aria-label="الإعدادات">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 00.34 1.87l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.7 1.7 0 00-1.87-.34 1.7 1.7 0 00-1 1.55V21a2 2 0 11-4 0v-.11a1.7 1.7 0 00-1.11-1.55 1.7 1.7 0 00-1.87.34l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.7 1.7 0 004.6 15a1.7 1.7 0 00-1.55-1H3a2 2 0 110-4h.11A1.7 1.7 0 004.66 8.9a1.7 1.7 0 00-.34-1.87l-.06-.06A2 2 0 117.09 4.14l.06.06a1.7 1.7 0 001.87.34H9a1.7 1.7 0 001-1.55V3a2 2 0 114 0v.11a1.7 1.7 0 001 1.55 1.7 1.7 0 001.87-.34l.06-.06a2 2 0 112.83 2.83l-.06.06a1.7 1.7 0 00-.34 1.87V9a1.7 1.7 0 001.55 1H21a2 2 0 110 4h-.11a1.7 1.7 0 00-1.49 1z"/></svg>
+    </div>
+    <div class="hero-body">
+      <div class="logo-fa">فكسب</div>
+      <div class="logo-en">SMART CITY</div>
+      <div class="logo-sub">ابنِ · استثمر · ارتقِ</div>
+      <div class="hero-stats">
+        <div class="hstat"><b id="hsLand">0</b><span>أرض</span></div>
+        <div class="hstat"><b id="hsHouse">0</b><span>عقار</span></div>
+        <div class="hstat"><b id="hsRent">0</b><span>إيجار/ساعة</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VIEW: CITY -->
+  <div class="view active" id="v-city">
+    <div class="panel">
+      <div class="phead"><div class="ptitle"><span class="dot"></span> خريطة المدينة</div><span class="pmeta" id="mapMeta">0 من 50</span></div>
+      <div class="city" id="cityBox">
+        <div class="roads" id="roads"></div>
+        <div class="map" id="mapGrid"></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="btn btn-gold" id="collectAllBtn" onclick="collectAll()">جمع كل الإيجارات</button>
+        <button class="btn btn-ghost sm" style="width:auto;padding:0 14px" onclick="buyLand()" id="buyLandBtn">شراء أرض</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="phead"><div class="ptitle"><span class="dot"></span> ملخص الاستثمار</div><span class="pmeta">عملة</span></div>
+      <div class="grid3">
+        <div class="stat"><b id="stHour">0</b><span>دخل/ساعة</span></div>
+        <div class="stat"><b id="stDay">0</b><span>دخل/يوم</span></div>
+        <div class="stat"><b id="stTotal">0</b><span>إجمالي مكتسب</span></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="phead"><div class="ptitle"><span class="dot"></span> مكافأة اليوم</div><span class="tag y" id="streakTag">سلسلة 0 أيام</span></div>
+      <div class="row"><div class="ic" data-ico="gift"></div>
+        <div class="tx"><b>تسجيل الدخول اليومي</b><span>+5 خبرة · مكافأة تزيد مع السلسلة</span></div><div class="val" id="dailyVal">+150</div></div>
+      <button class="btn btn-ghost" style="margin-top:10px" id="dailyBtn" onclick="claimDaily()">استلام المكافأة</button>
+    </div>
+  </div>
+
+  <!-- VIEW: BUILD -->
+  <div class="view" id="v-build">
+    <div class="panel">
+      <div class="phead"><div class="ptitle"><span class="dot"></span> ابنِ عقارك</div><span class="pmeta" id="freeLandMeta">أراضٍ فارغة: 0</span></div>
+      <div class="grid3" id="buildGrid"></div>
+    </div>
+    <div class="panel">
+      <div class="phead"><div class="ptitle"><span class="dot"></span> الأراضي</div><span class="pmeta">500 عملة للقطعة</span></div>
+      <div class="row"><div class="ic" data-ico="land"></div>
+        <div class="tx"><b>قطعة أرض جديدة</b><span>50 قطعة متاحة في المدينة</span></div><div class="val" id="landLeft">50</div></div>
+      <button class="btn btn-gold" style="margin-top:10px" onclick="buyLand()">شراء أرض · 500 عملة</button>
+    </div>
+    <div class="panel">
+      <div class="phead"><div class="ptitle"><span class="dot"></span> حدود البناء</div><span class="pmeta">حسب مستواك</span></div>
+      <div class="row"><div class="ic" data-ico="house"></div><div class="tx"><b>بيت صغير</b><span>يُفتح عند المستوى 3 · 14 عملة/ساعة</span></div><div class="val">1,000</div></div>
+      <div class="row"><div class="ic" data-ico="house"></div><div class="tx"><b>بيت متوسط</b><span>يُفتح عند المستوى 4 · 32 عملة/ساعة</span></div><div class="val">2,000</div></div>
+      <div class="row"><div class="ic" data-ico="crown"></div><div class="tx"><b>بيت فاخر</b><span>يُفتح عند المستوى 5 · 75 عملة/ساعة</span></div><div class="val">4,000</div></div>
+    </div>
+  </div>
+
+  <!-- VIEW: MARKET -->
+  <div class="view" id="v-market">
+    <div class="panel">
+      <div class="phead"><div class="ptitle"><span class="dot"></span> السوق العقاري</div><span class="pmeta">بيع · تطوير</span></div>
+      <div id="marketList"></div>
+    </div>
+  </div>
+
+  <!-- VIEW: TASKS -->
+  <div class="view" id="v-tasks">
+    <div class="panel">
+      <div class="phead"><div class="ptitle"><span class="dot"></span> مهام اليوم</div><span class="pmeta" id="taskMeta">0 / 3</span></div>
+      <div id="taskList"></div>
+    </div>
+    <div class="panel">
+      <div class="phead"><div class="ptitle"><span class="dot"></span> الإنجازات</div><span class="pmeta" id="achMeta">0 / 12</span></div>
+      <div id="achList"></div>
+    </div>
+    <div class="panel">
+      <div class="phead"><div class="ptitle"><span class="dot"></span> جدول النقاط</div><span class="pmeta">خبرة</span></div>
+      <div class="row"><div class="ic" data-ico="build"></div><div class="tx"><b>بناء بيت</b></div><div class="val">+50</div></div>
+      <div class="row"><div class="ic" data-ico="deal"></div><div class="tx"><b>بيع بيت</b></div><div class="val">+40</div></div>
+      <div class="row"><div class="ic" data-ico="key"></div><div class="tx"><b>استلام إيجار</b></div><div class="val">+30</div></div>
+      <div class="row"><div class="ic" data-ico="cal"></div><div class="tx"><b>الدخول اليومي</b></div><div class="val">+5</div></div>
+      <div class="row"><div class="ic" data-ico="globe"></div><div class="tx"><b>شراء أرض</b></div><div class="val">+25</div></div>
+    </div>
+  </div>
+
+  <!-- VIEW: LEVELS -->
+  <div class="view" id="v-levels">
+    <div class="panel">
+      <div class="phead"><div class="ptitle"><span class="dot"></span> جميع المستويات</div><span class="pmeta">1 → 10</span></div>
+      <div class="ladder" id="ladder"></div>
+    </div>
+    <div class="panel">
+      <div class="phead"><div class="ptitle"><span class="dot"></span> مكافآت الترقية</div><span class="pmeta">حتى المستوى 10</span></div>
+      <div class="grid2" id="rewardGrid"></div>
+    </div>
+  </div>
+
+</div>
+
+<nav class="tabs">
+  <div class="tabs-inner">
+    <button class="tab active" data-view="city" onclick="go('city',this)">
+      <svg viewBox="0 0 24 24"><path d="M3 21h18M5 21V9l7-5 7 5v12M9 21v-6h6v6"/></svg><span>المدينة</span></button>
+    <button class="tab" data-view="build" onclick="go('build',this)">
+      <svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18"/></svg><span>بناء</span></button>
+    <button class="tab" data-view="market" onclick="go('market',this)">
+      <svg viewBox="0 0 24 24"><path d="M3 9l3-5h12l3 5M4 9v11h16V9M9 20v-6h6v6"/></svg><span>السوق</span></button>
+    <button class="tab" data-view="tasks" onclick="go('tasks',this)">
+      <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg><span>المهام</span></button>
+    <button class="tab" data-view="levels" onclick="go('levels',this)">
+      <svg viewBox="0 0 24 24"><path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 01-10 0V4zM17 4h3v2a3 3 0 01-3 3M7 4H4v2a3 3 0 003 3"/></svg><span>المستويات</span></button>
+  </div>
+</nav>
+
+<div id="toast"></div>
+<div id="modal"><div class="sheet" id="sheet"></div></div>
+<div id="tour"><div class="tour-card" id="tourCard"></div></div>
+
+<script>
+/* ================= config ================= */
+const HOUSES = {
+  small:  {id:'small',  name:'بيت صغير',  build:1000, minLvl:3, rent:14, value:1500, exp:50, tenants:1},
+  medium: {id:'medium', name:'بيت متوسط', build:2000, minLvl:4, rent:32, value:3000, exp:50, tenants:2},
+  luxury: {id:'luxury', name:'بيت فاخر',  build:5000, minLvl:5, rent:75, value:6000, exp:50, tenants:3}
+};
+/* قانون المستويات: الخبرة المطلوبة للانتقال من المستوى i إلى i+1 */
+const XP_TABLE   = [0,100,250,500,900,1500,2500,4000,6000,9000];
+const LEVEL_NAME = ['وافد جديد','مقيم','مالك','مستثمر ناشئ','مطوّر عقاري','مستثمر متقدم','مستثمر متميز','رجل العقار','قطب الاستثمار','إمبراطور العقار'];
+/* مكافأة الوصول لكل مستوى — مرة واحدة فقط، تُدفع عند الترقية */
+const LVL_REWARD = [0,100,150,200,300,400,500,750,1000,1500];
+const LAND_PRICE = 500;
+const MAX_LANDS  = 50;
+const RENT_CAP   = 6*60*60;          // seconds of accrual cap per property
+const VERSION    = '2.0.0';
+
+const ACHS = [
+  {id:'land1',  name:'أول قطعة',        desc:'اشترِ أول قطعة أرض',        ico:'land',  test:s=>s.lands>=1,                 rew:100},
+  {id:'house1', name:'أول بيت',         desc:'ابنِ أول عقار',             ico:'house', test:s=>s.houses.length>=1,         rew:150},
+  {id:'house5', name:'مطوّر',           desc:'امتلك 5 عقارات',            ico:'build', test:s=>s.houses.length>=5,         rew:400},
+  {id:'house10',name:'مستثمر',          desc:'امتلك 10 عقارات',           ico:'chart', test:s=>s.houses.length>=10,        rew:900},
+  {id:'lvl3',   name:'مالك',            desc:'اوصل للمستوى 3',            ico:'crown', test:s=>s.level>=3,                 rew:200},
+  {id:'lvl5',   name:'مطوّر عقاري',     desc:'اوصل للمستوى 5',            ico:'crown', test:s=>s.level>=5,                 rew:500},
+  {id:'lvl10',  name:'إمبراطور العقار', desc:'اوصل للمستوى 10',           ico:'crown', test:s=>s.level>=10,               rew:3000},
+  {id:'sell1',  name:'أول صفقة',        desc:'أتمم أول عملية بيع',        ico:'deal',  test:s=>s.sold>=1,                  rew:120},
+  {id:'rent1',  name:'أول إيجار',       desc:'استلم إيجاراً لأول مرة',    ico:'key',   test:s=>s.rents>=1,                 rew:120},
+  {id:'lux1',   name:'فخامة',           desc:'ابنِ بيتاً فاخراً',         ico:'crown', test:s=>s.houses.some(h=>h.type==='luxury'), rew:600},
+  {id:'earn10k',name:'عشرة آلاف',       desc:'اجمع 10,000 عملة إجمالاً',  ico:'chart', test:s=>s.earned>=10000,            rew:500},
+  {id:'streak7',name:'أسبوع كامل',      desc:'سلسلة دخول 7 أيام',         ico:'cal',   test:s=>s.streak>=7,                rew:700}
+];
+
+/* inline svg icon set */
+const I = {
+  house:'<svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/></svg>',
+  land:'<svg viewBox="0 0 24 24"><path d="M12 21V9"/><path d="M12 9c0-4 2-6 6-6 0 4-2 6-6 6z"/><path d="M12 14c0-3-1.5-5-5-5 0 3 1.5 5 5 5z"/></svg>',
+  gift:'<svg viewBox="0 0 24 24"><path d="M20 12v9H4v-9"/><path d="M2 8h20v4H2z"/><path d="M12 21V8"/><path d="M12 8S9.5 3 7 3a2.5 2.5 0 000 5"/><path d="M12 8s2.5-5 5-5a2.5 2.5 0 010 5"/></svg>',
+  build:'<svg viewBox="0 0 24 24"><path d="M14.5 3.5a5 5 0 00-6.9 6.9L3 15v6h6l4.6-4.6a5 5 0 006.9-6.9L16 13l-3-3 1.5-6.5z"/></svg>',
+  deal:'<svg viewBox="0 0 24 24"><path d="M3 12l4-4 5 5 5-5 4 4"/><path d="M8 8v8M16 8v8"/></svg>',
+  key:'<svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="4"/><path d="M11 11l9 9M17 17l2-2M14 14l2-2"/></svg>',
+  cal:'<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>',
+  globe:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 010 18M12 3a15 15 0 000 18"/></svg>',
+  chart:'<svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
+  crown:'<svg viewBox="0 0 24 24"><path d="M3 8l4 4 5-7 5 7 4-4-2 12H5L3 8z"/></svg>',
+  plus:'<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+  lock:'<svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg>',
+  settings:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"/></svg>',
+  sound:'<svg viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 010 7M18.5 5.5a9 9 0 010 13"/></svg>',
+  mute:'<svg viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M22 9l-6 6M16 9l6 6"/></svg>',
+  reset:'<svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>',
+  info:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>',
+  star:'<svg viewBox="0 0 24 24"><path d="M12 3l2.9 5.9 6.5.9-4.7 4.6 1.1 6.4-5.8-3-5.8 3 1.1-6.4L2.6 9.8l6.5-.9L12 3z"/></svg>'
+};
+
+/* ================= state ================= */
+const DEF = {
+  coins:2500, xp:0, level:1,
+  lands:0, houses:[], nextId:1,
+  lastDaily:null, streak:0,
+  tasks:{build:0,sell:0,rent:0}, tasksClaimed:false, taskDay:null,
+  sold:0, rents:0, earned:0, built:0,
+  ach:{}, sound:true, haptics:true,
+  tourDone:false, lastSeen:null, v:2
+};
+let S = load();
+
+function load(){
+  try{
+    const raw = localStorage.getItem('faksab_v1');
+    if(!raw) return Object.assign({}, DEF);
+    const s = Object.assign({}, DEF, JSON.parse(raw));
+    s.tasks = Object.assign({build:0,sell:0,rent:0}, s.tasks||{});
+    s.ach = s.ach || {};
+    s.houses = (s.houses||[]).map(h=>({...h, collectedAt: h.collectedAt||Date.now()}));
+    return s;
+  }catch(e){ return Object.assign({}, DEF); }
+}
+function save(){ try{ localStorage.setItem('faksab_v1', JSON.stringify(S)); }catch(e){} }
+
+/* ================= helpers ================= */
+const fmt = n => Math.floor(n).toLocaleString('en-US');
+const xpNeed = lvl => XP_TABLE[lvl] ?? null;
+const propCap = () => S.level;
+const freeLand = () => S.lands - S.houses.length;
+const $ = id => document.getElementById(id);
+
+function vibrate(ms){ try{ if(S.haptics && navigator.vibrate) navigator.vibrate(ms); }catch(e){} }
+
+/* --- sound: synthesized, no assets --- */
+let AC = null;
+function ac(){
+  if(!S.sound) return null;
+  try{
+    if(!AC) AC = new (window.AudioContext||window.webkitAudioContext)();
+    if(AC.state === 'suspended') AC.resume();
+    return AC;
+  }catch(e){ return null; }
+}
+function tone(freq, dur, type, gain, delay){
+  const c = ac(); if(!c) return;
+  const t0 = c.currentTime + (delay||0);
+  const o = c.createOscillator(), g = c.createGain();
+  o.type = type||'sine'; o.frequency.setValueAtTime(freq, t0);
+  g.gain.setValueAtTime(0, t0);
+  g.gain.linearRampToValueAtTime(gain||0.06, t0+0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0+dur);
+  o.connect(g); g.connect(c.destination);
+  o.start(t0); o.stop(t0+dur+0.02);
+}
+const SFX = {
+  tap:   ()=> tone(520,.06,'sine',.035),
+  coin:  ()=>{ tone(880,.09,'triangle',.06,0); tone(1320,.12,'triangle',.05,.06); },
+  build: ()=>{ tone(300,.10,'square',.035,0); tone(450,.10,'square',.035,.08); tone(600,.16,'triangle',.05,.16); },
+  buy:   ()=>{ tone(660,.08,'triangle',.05,0); tone(990,.14,'triangle',.05,.07); },
+  err:   ()=>{ tone(240,.12,'square',.04,0); tone(180,.14,'square',.04,.09); },
+  level: ()=>{ [523,659,784,1047].forEach((f,i)=>tone(f,.22,'triangle',.06,i*0.09)); }
+};
+
+function toast(msg, kind=''){
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'show ' + kind;
+  clearTimeout(t._h);
+  t._h = setTimeout(()=> t.className = '', 2400);
+}
+function addCoins(n){ S.coins += n; if(n>0) S.earned += n; }
+function addXP(n, silent){ S.xp += n; checkLevelUp(silent); }
+function checkLevelUp(silent){
+  while(S.level < 10){
+    const need = XP_TABLE[S.level];
+    if(need === null || S.xp < need) break;
+    S.xp -= need;
+    S.level++;
+    const reward = LVL_REWARD[S.level-1] || 0;
+    addCoins(reward);
+    if(!silent){
+      SFX.level(); vibrate(60);
+      toast(`ترقية! المستوى ${S.level} — ${LEVEL_NAME[S.level-1]} · +${fmt(reward)} عملة`, 'ok');
+    }
+  }
+}
+
+/* ================= actions ================= */
+function buyLand(){
+  if(S.lands >= MAX_LANDS){ SFX.err(); return toast('كل الأراضي مُباعة حالياً', 'bad'); }
+  if(S.coins < LAND_PRICE){ SFX.err(); return toast('عملاتك لا تكفي — تحتاج 500 عملة', 'bad'); }
+  S.coins -= LAND_PRICE; S.lands++;
+  addXP(25); SFX.buy(); vibrate(15);
+  save(); render();
+  toast('تم شراء قطعة أرض · +25 خبرة', 'ok');
+}
+
+function canBuild(type){
+  const h = HOUSES[type];
+  if(S.level < h.minLvl) return `يُفتح عند المستوى ${h.minLvl}`;
+  if(freeLand() <= 0) return 'تحتاج قطعة أرض فارغة';
+  if(S.houses.length >= propCap()) return 'وصلت لحد الملكية لمستواك';
+  if(S.coins < h.build) return 'عملاتك لا تكفي';
+  return null;
+}
+
+function build(type){
+  const err = canBuild(type);
+  if(err){ SFX.err(); return toast(err, 'bad'); }
+  const h = HOUSES[type];
+  /* خبرة البناء بحسب قانون النشاط: أول بيت 100، الثاني 50، الثالث وما بعده 25 */
+  const nBefore = S.houses.length;
+  const gain = nBefore === 0 ? 100 : nBefore === 1 ? 50 : 25;
+  S.coins -= h.build;
+  S.houses.push({id:S.nextId++, type, lvl:1, collectedAt:Date.now(), built:Date.now()});
+  S.tasks.build++; S.built++;
+  addXP(gain); SFX.build(); vibrate(25);
+  closeSheet(); save(); render();
+  toast(`تم بناء ${h.name} · +${gain} خبرة`, 'ok');
+}
+
+function upgrade(id){
+  const hs = S.houses.find(h=>h.id===id); if(!hs) return;
+  if(hs.lvl >= 3){ SFX.err(); return toast('هذا العقار بأعلى مستوى تطوير', 'bad'); }
+  const cost = upgradeCost(hs);
+  if(S.coins < cost){ SFX.err(); return toast('عملاتك لا تكفي للتطوير', 'bad'); }
+  S.coins -= cost; hs.lvl++;
+  addXP(20); SFX.build(); vibrate(20);
+  closeSheet(); save(); render();
+  toast(`تم التطوير إلى مستوى ${hs.lvl} · +20 خبرة`, 'ok');
+}
+const upgradeCost = hs => Math.round(HOUSES[hs.type].build * 0.5 * hs.lvl);
+
+function collect(id){
+  const hs = S.houses.find(h=>h.id===id); if(!hs) return 0;
+  const amount = rentAmount(hs);
+  if(amount < 1){ SFX.err(); return toast('لم يتراكم إيجار بعد', 'bad'); }
+  hs.collectedAt = Date.now();
+  addCoins(amount); S.rents++; S.tasks.rent++;
+  addXP(30); SFX.coin(); vibrate(18);
+  closeSheet(); save(); render();
+  toast(`+${fmt(amount)} عملة إيجار · +30 خبرة`, 'ok');
+  return amount;
+}
+
+function collectAll(){
+  const ready = S.houses.filter(h=>rentAmount(h) >= 1);
+  if(!ready.length){ SFX.err(); return toast('لا يوجد إيجار جاهز الآن', 'bad'); }
+  let sum = 0, last = 0;
+  ready.forEach(h=>{
+    const amt = rentAmount(h);
+    h.collectedAt = Date.now();
+    sum += amt; last += 30;
+  });
+  addCoins(sum);
+  S.rents += ready.length;
+  S.tasks.rent += ready.length;
+  addXP(last);
+  SFX.coin(); vibrate(25);
+  closeSheet(); save(); render();
+  toast(`جمعت ${fmt(sum)} عملة من ${ready.length} عقار`, 'ok');
+}
+
+function sell(id){
+  const hs = S.houses.find(h=>h.id===id); if(!hs) return;
+  /* السعر المرجعي للعقار الجاهز × التطوير، ثم تُخصم عمولة البيع 10% من البائع */
+  const price = Math.round(HOUSES[hs.type].value * (1 + .35*(hs.lvl-1)) * 0.9);
+  confirmSheet('بيع العقار',
+    `سيتم بيع ${HOUSES[hs.type].name} (تطوير ${hs.lvl}) بمبلغ ${fmt(price)} عملة بعد عمولة 10%.`,
+    'بيع الآن', ()=>{
+      S.houses = S.houses.filter(h=>h.id!==id);
+      addCoins(price); S.sold++; S.tasks.sell++;
+      addXP(40); SFX.coin(); vibrate(20);
+      save(); render();
+      toast(`تم البيع · +${fmt(price)} عملة · +40 خبرة`, 'ok');
+    });
+}
+
+function claimDaily(){
+  const today = new Date().toDateString();
+  if(S.lastDaily === today){ SFX.err(); return toast('استلمت مكافأة اليوم بالفعل', 'bad'); }
+  const yest = new Date(Date.now()-864e5).toDateString();
+  S.streak = (S.lastDaily === yest) ? S.streak + 1 : 1;
+  S.lastDaily = today;
+  const coins = dailyReward();
+  addCoins(coins); addXP(5);
+  SFX.level(); vibrate(30);
+  save(); render();
+  toast(`مكافأة اليوم: ${fmt(coins)} عملة · سلسلة ${S.streak} أيام`, 'ok');
+}
+const dailyReward = () => 120 + Math.min(S.streak + ((S.lastDaily===new Date(Date.now()-864e5).toDateString())?1:0), 7)*30;
+
+function claimTasks(){
+  if(S.tasksClaimed){ SFX.err(); return toast('استلمت مكافأة المهام اليوم', 'bad'); }
+  const done = [S.tasks.build>0, S.tasks.sell>0, S.tasks.rent>0].filter(Boolean).length;
+  if(done < 3){ SFX.err(); return toast(`أكمل المهام الثلاث أولاً (${done}/3)`, 'bad'); }
+  S.tasksClaimed = true;
+  addCoins(300); addXP(20);
+  SFX.level(); vibrate(25);
+  save(); render();
+  toast('مكافأة المهام: 300 عملة · +20 خبرة', 'ok');
+}
+
+function rentRate(hs){ return HOUSES[hs.type].rent * (1 + .5*(hs.lvl-1)); }   // per hour
+function rentAmount(hs){
+  const secs = Math.min((Date.now()-(hs.collectedAt||Date.now()))/1000, RENT_CAP);
+  return Math.floor(rentRate(hs) * secs / 3600);
+}
+const incomeHour = () => S.houses.reduce((a,h)=> a + rentRate(h), 0);
+
+/* ================= sheets ================= */
+function openSheet(html){
+  $('sheet').innerHTML = html;
+  $('modal').classList.add('show');
+}
+function closeSheet(){ $('modal').classList.remove('show'); }
+document.getElementById('modal').addEventListener('click', e=>{ if(e.target.id === 'modal') closeSheet(); });
+
+function confirmSheet(title, text, okLabel, onOk){
+  openSheet(`<h3>${title}</h3><p>${text}</p>
+    <button class="btn btn-gold" id="mOk">${okLabel}</button>
+    <button class="btn btn-ghost" style="margin-top:8px" id="mNo">إلغاء</button>`);
+  $('mOk').onclick = ()=>{ closeSheet(); onOk(); };
+  $('mNo').onclick = closeSheet;
+}
+
+function plotSheet(i){
+  if(i >= S.lands){ buyLand(); return; }             // unowned plot → buy
+  const house = S.houses[i];
+  if(!house){                                         // empty owned plot
+    openSheet(`<h3>قطعة أرض فارغة</h3><p>اختر نوع العقار الذي تريد بناءه على هذه القطعة.</p>
+      <div class="grid3">${Object.values(HOUSES).map(H=>{
+        const err = canBuild(H.id), locked = S.level < H.minLvl;
+        return `<div class="card ${locked?'locked':''}">
+          ${locked?`<span class="lock">مستوى ${H.minLvl}</span>`:''}
+          <div class="art">${houseArt(H.id)}</div><h4>${H.name}</h4>
+          <div class="price">${fmt(H.build)}</div>
+          <button class="btn ${err?'btn-ghost':'btn-gold'} sm" style="margin-top:8px;width:100%"
+            onclick="tryBuild('${H.id}')" ${err?'disabled':''}>${err?'مقفل':'ابنِ'}</button>
+        </div>`;
+      }).join('')}</div>
+      <button class="btn btn-ghost" style="margin-top:12px" onclick="closeSheet()">إغلاق</button>`);
+    return;
+  }
+  // built plot
+  const H = HOUSES[house.type], amt = rentAmount(house), rate = rentRate(house);
+  openSheet(`<h3>${H.name} · تطوير ${house.lvl}</h3>
+    <div class="art">${houseArt(house.type)}</div>
+    <div class="kv"><span>الإيجار المتراكم</span><b>${fmt(amt)} عملة</b></div>
+    <div class="kv"><span>معدل الإيجار</span><b>${fmt(rate)} / ساعة</b></div>
+    <div class="kv"><span>تكلفة التطوير</span><b>${house.lvl>=3?'أقصى تطوير':fmt(upgradeCost(house))+' عملة'}</b></div>
+    <button class="btn btn-green" style="margin-top:12px" ${amt<1?'disabled':''} onclick="collect(${house.id})">جمع ${amt>0?fmt(amt)+' عملة':'—'}</button>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn btn-ghost" ${house.lvl>=3?'disabled':''} onclick="upgrade(${house.id})">تطوير</button>
+      <button class="btn btn-red" onclick="sell(${house.id})">بيع</button>
+    </div>`);
+}
+function tryBuild(type){
+  const err = canBuild(type);
+  if(err){ SFX.err(); return toast(err, 'bad'); }
+  build(type);
+}
+
+/* settings */
+function openSettings(){
+  openSheet(`<h3>الإعدادات</h3>
+    <div class="row"><div class="ic">${I.sound}</div><div class="tx"><b>الأصوات</b><span>مؤثرات صوتية</span></div>
+      <button class="btn btn-ghost sm" onclick="toggleSound()">${S.sound?'مفعّل':'مغلق'}</button></div>
+    <div class="row"><div class="ic">${I.star}</div><div class="tx"><b>الاهتزاز</b><span>استجابة لمسية</span></div>
+      <button class="btn btn-ghost sm" onclick="toggleHaptics()">${S.haptics?'مفعّل':'مغلق'}</button></div>
+    <div class="row"><div class="ic">${I.info}</div><div class="tx"><b>الإصدار</b><span>فكسب سمارت سيتي · لعبة بلا إنترنت</span></div><div class="val">${VERSION}</div></div>
+    <button class="btn btn-ghost" style="margin-top:12px" onclick="closeSheet()">إغلاق</button>
+    <button class="btn btn-red" style="margin-top:8px" onclick="resetGame()">حذف التقدّم والبدء من جديد</button>`);
+}
+function toggleSound(){ S.sound = !S.sound; save(); SFX.tap(); openSettings(); }
+function toggleHaptics(){ S.haptics = !S.haptics; save(); vibrate(15); openSettings(); }
+function resetGame(){
+  confirmSheet('حذف التقدّم','سيُحذف كل شيء: العملات، الأراضي، العقارات، المستوى. لا يمكن التراجع.','حذف نهائي',()=>{
+    localStorage.removeItem('faksab_v1');
+    S = Object.assign({}, DEF); S.tourDone = true;
+    save(); render();
+    toast('بدأت من جديد', 'ok');
+  });
+}
+
+/* ================= tutorial ================= */
+const TOUR = [
+  {ico:'land',  t:'مرحباً بك في فكسب', p:'أنت الآن مطوّر عقاري في مدينة ذكية. ابدأ بشراء قطعة أرض، ثم ابنِ عليها بيتاً يدرّ عليك إيجاراً كل دقيقة تمر.'},
+  {ico:'house', t:'ابنِ واستثمر',      p:'كل بيت يجمع إيجاراً تلقائياً حتى ٦ ساعات وأنت بعيد. اضغط على أي عقار في الخريطة لجمعه أو تطويره أو بيعه.'},
+  {ico:'crown', t:'ارتقِ للمستوى 10',  p:'الخبرة تفتح أنواع العقارات وترفع حد الملكية. أكمل مهام اليوم والإنجازات لتصبح إمبراطور العقار.'}
+];
+let tourStep = 0;
+function showTour(){ tourStep = 0; $('tour').classList.add('show'); paintTour(); }
+function paintTour(){
+  const s = TOUR[tourStep];
+  $('tourCard').innerHTML = `
+    <div class="tart">${I[s.ico]}</div>
+    <h2>${s.t}</h2><p>${s.p}</p>
+    <div class="dots">${TOUR.map((_,i)=>`<i class="${i===tourStep?'on':''}"></i>`).join('')}</div>
+    <button class="btn btn-gold" onclick="nextTour()">${tourStep===TOUR.length-1?'ابدأ اللعب':'التالي'}</button>
+    <button class="tour-skip" onclick="endTour()">تخطّي الشرح</button>`;
+}
+function nextTour(){
+  SFX.tap(); vibrate(10);
+  if(tourStep === TOUR.length-1) return endTour();
+  tourStep++; paintTour();
+}
+function endTour(){ $('tour').classList.remove('show'); S.tourDone = true; save(); }
+
+/* ================= offline report ================= */
+function offlineReport(){
+  if(!S.lastSeen || !S.houses.length) return;
+  const away = Date.now() - S.lastSeen;
+  if(away < 3*60*1000) return;                       // under 3 minutes: stay quiet
+  const total = S.houses.reduce((a,h)=> a + rentAmount(h), 0);
+  if(total < 10) return;
+  const ready = S.houses.filter(h=>rentAmount(h) >= 1).length;
+  const mins = Math.floor(away/60000);
+  const span = mins >= 60 ? `${Math.floor(mins/60)} ساعة` : `${mins} دقيقة`;
+  setTimeout(()=>{
+    openSheet(`<h3>أثناء غيابك</h3>
+      <p>غبت ${span}، وتراكم لعقاراتك ${fmt(total)} عملة إيجار جاهزة للجمع.</p>
+      <div class="kv"><span>عقارات جاهزة</span><b>${ready} من ${S.houses.length}</b></div>
+      <div class="kv"><span>الإيجار المتراكم</span><b>${fmt(total)} عملة</b></div>
+      <button class="btn btn-green" style="margin-top:12px" onclick="collectAll()">جمع الكل الآن</button>
+      <button class="btn btn-ghost" style="margin-top:8px" onclick="closeSheet()">لاحقاً</button>`);
+  }, 600);
+}
+
+/* ================= art ================= */
+function houseArt(type){
+  if(type==='luxury') return `<svg viewBox="0 0 120 90">
+    <defs><linearGradient id="l1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe9a8"/><stop offset="1" stop-color="#e0a63a"/></linearGradient></defs>
+    <ellipse cx="60" cy="82" rx="46" ry="7" fill="#000" opacity=".28"/>
+    <rect x="18" y="42" width="84" height="36" rx="3" fill="#f6e2b6"/>
+    <rect x="14" y="34" width="92" height="12" rx="3" fill="url(#l1)"/>
+    <rect x="26" y="48" width="16" height="16" rx="2" fill="#7ee8ff" opacity=".85"/>
+    <rect x="52" y="48" width="16" height="22" rx="2" fill="#0d2750"/>
+    <rect x="78" y="48" width="16" height="16" rx="2" fill="#7ee8ff" opacity=".85"/>
+    <rect x="46" y="12" width="28" height="24" rx="3" fill="#f2cf7c"/>
+    <path d="M42 12 L60 2 L78 12 Z" fill="url(#l1)"/>
+    <rect x="56" y="18" width="8" height="10" rx="1.5" fill="#0d2750"/>
+    <g stroke="#7fd6a8" stroke-width="2" stroke-linecap="round">
+      <path d="M10 78 V62"/><path d="M10 62 q-7 -4 -7 -11 q7 1 7 11"/><path d="M10 62 q7 -4 7 -11 q-7 1 -7 11"/>
+      <path d="M110 78 V66"/><path d="M110 66 q-6 -3 -6 -9 q6 1 6 9"/><path d="M110 66 q6 -3 6 -9 q-6 1 -6 9"/>
+    </g></svg>`;
+  if(type==='medium') return `<svg viewBox="0 0 120 90">
+    <defs><linearGradient id="m1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#bcd9ff"/><stop offset="1" stop-color="#5b8fd6"/></linearGradient></defs>
+    <ellipse cx="60" cy="82" rx="42" ry="6" fill="#000" opacity=".28"/>
+    <rect x="22" y="46" width="76" height="32" rx="3" fill="#dfeaff"/>
+    <rect x="18" y="40" width="84" height="9" rx="3" fill="url(#m1)"/>
+    <rect x="34" y="16" width="52" height="24" rx="3" fill="#eef5ff"/>
+    <rect x="28" y="10" width="64" height="9" rx="3" fill="url(#m1)"/>
+    <rect x="40" y="22" width="12" height="12" rx="2" fill="#7ee8ff"/>
+    <rect x="60" y="22" width="12" height="12" rx="2" fill="#7ee8ff"/>
+    <rect x="54" y="54" width="14" height="24" rx="2" fill="#0d2750"/>
+    <rect x="30" y="54" width="12" height="12" rx="2" fill="#9fd2ff" opacity=".9"/>
+    <rect x="78" y="54" width="12" height="12" rx="2" fill="#9fd2ff" opacity=".9"/></svg>`;
+  return `<svg viewBox="0 0 120 90">
+    <defs><linearGradient id="s1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a8e6c8"/><stop offset="1" stop-color="#3f9c74"/></linearGradient></defs>
+    <ellipse cx="60" cy="82" rx="38" ry="6" fill="#000" opacity=".28"/>
+    <rect x="26" y="46" width="68" height="32" rx="3" fill="#e6f7ee"/>
+    <path d="M18 46 L60 16 L102 46 Z" fill="url(#s1)"/>
+    <path d="M50 46 L60 16 L70 46 Z" fill="#ffffff" opacity=".12"/>
+    <rect x="52" y="56" width="16" height="22" rx="2" fill="#0d2750"/>
+    <rect x="34" y="54" width="11" height="11" rx="2" fill="#9fe8ff"/>
+    <rect x="76" y="54" width="11" height="11" rx="2" fill="#9fe8ff"/>
+    <circle cx="60" cy="10" r="2.5" fill="#ffd24a"/></svg>`;
+}
+
+/* ================= render ================= */
+/* ================= city roads & traffic ================= */
+let roadSig = '', roadTimer = 0;
+const CAR_COLORS = ['#ffd257','#7ec8ff','#ff8a7a','#b6f09c','#e7e9f5'];
+
+function buildRoads(){
+  const box = $('cityBox'), layer = $('roads'), map = $('mapGrid');
+  if(!box || !layer || !map) return;
+  const first = map.querySelector('.plot');
+  if(!first) return;
+  const cell = first.getBoundingClientRect().width;
+  const gap = 14;
+  const W = box.clientWidth, H = box.clientHeight;
+  if(cell < 4) return;
+  const sig = cell.toFixed(1) + '|' + W + '|' + H;
+  if(sig === roadSig) return;
+  roadSig = sig;
+
+  let html = '';
+  for(let i=0;i<6;i++){                      // 6 vertical roads: 2 edges + 4 between columns
+    const x = i * (cell + gap);
+    html += `<div class="road vr" style="left:${x}px;top:0;width:${gap}px;height:${H}px"></div>`;
+    const n = (i===0 || i===5) ? 2 : 1;
+    for(let k=0;k<n;k++){
+      const dur = 8 + Math.random()*7, delay = -Math.random()*dur;
+      const col = CAR_COLORS[(i+k) % CAR_COLORS.length];
+      html += `<div class="car vc" style="left:${x+4.5}px;background:linear-gradient(180deg,${col},#1b2430);
+        animation-duration:${dur.toFixed(1)}s;animation-delay:${delay.toFixed(1)}s"></div>`;
+    }
+  }
+  for(let j=0;j<11;j++){                     // 11 horizontal roads: 2 edges + 9 between rows
+    const y = j * (cell + gap);
+    html += `<div class="road hr" style="top:${y}px;left:0;width:${W}px;height:${gap}px"></div>`;
+    const n = (j===0 || j===10) ? 2 : 1;
+    for(let k=0;k<n;k++){
+      const dur = 9 + Math.random()*8, delay = -Math.random()*dur;
+      const col = CAR_COLORS[(j+k+2) % CAR_COLORS.length];
+      html += `<div class="car hc" style="top:${y+4.5}px;background:linear-gradient(180deg,${col},#1b2430);
+        animation-duration:${dur.toFixed(1)}s;animation-delay:${delay.toFixed(1)}s"></div>`;
+    }
+  }
+  layer.innerHTML = html;
+}
+window.addEventListener('resize', ()=>{ clearTimeout(roadTimer); roadTimer = setTimeout(()=>{ roadSig=''; buildRoads(); }, 150); });
+
+function render(){
+  // daily task reset
+  const today = new Date().toDateString();
+  if(S.taskDay !== today){
+    S.taskDay = today;
+    S.tasks = {build:0,sell:0,rent:0};
+    S.tasksClaimed = false;
+    save();
+  }
+
+  // top
+  const need = xpNeed(S.level);
+  $('lvlNum').textContent = S.level;
+  $('lvlName').textContent = LEVEL_NAME[S.level-1];
+  $('coinVal').textContent = fmt(S.coins);
+  $('xpNow').textContent = fmt(S.xp);
+  $('xpNext').textContent = need===null ? '—' : fmt(need);
+  const p = need===null ? 100 : Math.min(100, (S.xp/need)*100);
+  $('xpFill').style.width = p+'%';
+  $('lvlRing').style.setProperty('--p', p);
+
+  // hero
+  $('hsLand').textContent = S.lands;
+  $('hsHouse').textContent = S.houses.length;
+  $('hsRent').textContent = fmt(incomeHour());
+  $('mapMeta').textContent = `${S.lands} من ${MAX_LANDS} قطعة`;
+
+  // map
+  let cells = '';
+  for(let i=0;i<MAX_LANDS;i++){
+    if(i >= S.lands){
+      cells += `<button class="plot free" onclick="plotSheet(${i})" aria-label="قطعة للبيع">${I.lock}<span class="pricebadge">500</span></button>`;
+    } else {
+      const h = S.houses[i];
+      if(!h){
+        cells += `<button class="plot empty" onclick="plotSheet(${i})" aria-label="أرض فارغة">${I.plus}</button>`;
+      } else {
+        const rdy = rentAmount(h) >= 1;
+        cells += `<button class="plot built" onclick="plotSheet(${i})" aria-label="${HOUSES[h.type].name}">
+          ${houseArt(h.type)}${rdy?'<span class="rdy"></span>':''}${h.lvl>1?`<span class="lvlbadge">${h.lvl}</span>`:''}</button>`;
+      }
+    }
+  }
+  $('mapGrid').innerHTML = cells;
+  buildRoads();
+
+  // collect-all state
+  const readySum = S.houses.reduce((a,h)=> a + rentAmount(h), 0);
+  const ca = $('collectAllBtn');
+  ca.disabled = readySum < 1;
+  ca.textContent = readySum > 0 ? `جمع كل الإيجارات · ${fmt(readySum)}` : 'لا إيجار جاهز';
+  const bl = $('buyLandBtn');
+  bl.disabled = S.lands >= MAX_LANDS;
+
+  // summary
+  const hour = incomeHour();
+  $('stHour').textContent = fmt(hour);
+  $('stDay').textContent = fmt(hour*24);
+  $('stTotal').textContent = fmt(S.earned);
+
+  // daily
+  $('streakTag').textContent = `سلسلة ${S.streak} أيام`;
+  $('dailyVal').textContent = '+' + fmt(dailyReward());
+  const db = $('dailyBtn');
+  db.disabled = S.lastDaily === today;
+  db.textContent = S.lastDaily === today ? 'تم الاستلام اليوم ✓' : 'استلام المكافأة';
+
+  // build grid
+  $('freeLandMeta').textContent = `أراضٍ فارغة: ${freeLand()}`;
+  $('landLeft').textContent = MAX_LANDS - S.lands;
+  $('buildGrid').innerHTML = Object.values(HOUSES).map(H=>{
+    const err = canBuild(H.id), locked = S.level < H.minLvl;
+    return `<div class="card ${locked?'locked':''}">
+      ${locked?`<span class="lock">مستوى ${H.minLvl}</span>`:''}
+      <div class="art">${houseArt(H.id)}</div>
+      <h4>${H.name}</h4>
+      <div class="price">${fmt(H.build)} عملة</div>
+      <button class="btn ${locked?'btn-ghost':'btn-gold'} sm" style="margin-top:8px;width:100%"
+        onclick="tryBuild('${H.id}')" ${err?'disabled':''}>${locked?'مقفل':'ابنِ'}</button>
+    </div>`;
+  }).join('');
+
+  // market
+  const ml = $('marketList');
+  if(!S.houses.length){
+    ml.innerHTML = `<div class="empty">لا عقارات للبيع بعد.<br>ابنِ أول عقار من تبويب البناء.</div>`;
+  } else {
+    ml.innerHTML = S.houses.map((h,idx)=>{
+      const base = HOUSES[h.type].build*(1+.35*(h.lvl-1));
+      const price = Math.round(base*.9);
+      const up = upgradeCost(h);
+      return `<div class="row">
+        <div class="ic">${I.house}</div>
+        <div class="tx"><b>${HOUSES[h.type].name} · قطعة ${idx+1}</b><span>قيمة السوق ${fmt(Math.round(base))} · عمولة 10%</span></div>
+        <button class="btn btn-ghost sm" onclick="upgrade(${h.id})" ${h.lvl>=3?'disabled':''}>تطوير ${h.lvl>=3?'—':fmt(up)}</button>
+        <button class="btn btn-gold sm" onclick="sell(${h.id})">بيع ${fmt(price)}</button>
+      </div>`;
+    }).join('');
+  }
+
+  // tasks
+  const t = S.tasks;
+  const doneN = [t.build>0,t.sell>0,t.rent>0].filter(Boolean).length;
+  $('taskMeta').textContent = `${doneN} / 3`;
+  $('taskList').innerHTML = `
+    <div class="row"><div class="ic">${I.build}</div><div class="tx"><b>ابنِ بيتاً واحداً</b><span>${Math.min(t.build,1)}/1</span></div><span class="tag ${t.build?'g':'y'}">${t.build?'تم':'قيد التنفيذ'}</span></div>
+    <div class="row"><div class="ic">${I.deal}</div><div class="tx"><b>أتمم صفقة بيع</b><span>${Math.min(t.sell,1)}/1</span></div><span class="tag ${t.sell?'g':'y'}">${t.sell?'تم':'قيد التنفيذ'}</span></div>
+    <div class="row"><div class="ic">${I.key}</div><div class="tx"><b>استلم إيجاراً</b><span>${Math.min(t.rent,1)}/1</span></div><span class="tag ${t.rent?'g':'y'}">${t.rent?'تم':'قيد التنفيذ'}</span></div>
+    <button class="btn ${S.tasksClaimed?'btn-ghost':'btn-gold'}" style="margin-top:12px" ${S.tasksClaimed?'disabled':''} onclick="claimTasks()">
+      ${S.tasksClaimed?'تم استلام المكافأة':'استلام 300 عملة + 20 خبرة'}</button>`;
+
+  // achievements
+  const achDone = ACHS.filter(a=>S.ach[a.id]).length;
+  $('achMeta').textContent = `${achDone} / ${ACHS.length}`;
+  $('achList').innerHTML = ACHS.map(a=>{
+    const unlocked = !!S.ach[a.id];
+    return `<div class="row ach ${unlocked?'done':''}">
+      <div class="ic">${I[a.ico]}</div>
+      <div class="tx"><b>${a.name}</b><span>${a.desc}</span></div>
+      <span class="tag ${unlocked?'g':'p'}">${unlocked?'مُنجز':'+'+a.rew}</span>
+    </div>`;
+  }).join('');
+
+  // ladder
+  $('ladder').innerHTML = XP_TABLE.map((xp,i)=>{
+    const lvl = i+1, cur = lvl===S.level, done = lvl<S.level;
+    return `<div class="lrow ${cur?'cur':''}">
+      <div class="n">${lvl}</div><div class="nm">${LEVEL_NAME[i]}</div>
+      <div class="xp">${xp===0?'البداية':fmt(xp)+' خبرة'}</div>
+      ${done?'<span class="tag g">✓</span>':cur?'<span class="tag b">الآن</span>':''}
+    </div>`;
+  }).join('');
+
+  // rewards
+  $('rewardGrid').innerHTML = LVL_REWARD.slice(1).map((r,i)=>`
+    <div class="card" style="padding:10px 8px">
+      <div style="font-size:11px;color:var(--muted);font-weight:700">المستوى ${i+2}</div>
+      <div style="font-size:15px;font-weight:900;color:var(--gold);margin-top:3px">${fmt(r)}</div>
+      <div style="font-size:9.5px;color:var(--muted)">عملة</div>
+    </div>`).join('');
+
+  checkAchievements();
+}
+
+function checkAchievements(){
+  const fresh = [];
+  ACHS.forEach(a=>{
+    if(S.ach[a.id]) return;
+    let ok = false;
+    try{ ok = a.test(S); }catch(e){}
+    if(ok){ S.ach[a.id] = Date.now(); addCoins(a.rew); addXP(25, true); fresh.push(a); }
+  });
+  if(fresh.length){
+    save();
+    SFX.level(); vibrate(40);
+    fresh.forEach(a=> toast(`إنجاز: ${a.name} · +${fmt(a.rew)} عملة`, 'ok'));
+  }
+}
+
+/* ================= nav ================= */
+function go(view, el){
+  SFX.tap(); vibrate(8);
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  $('v-'+view).classList.add('active');
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  if(el) el.classList.add('active');
+  window.scrollTo({top:0,behavior:'smooth'});
+  render();
+}
+
+/* hardware back (Android shell): sheet → city → let the app exit */
+window.__back = function(){
+  if($('modal').classList.contains('show')){ closeSheet(); return true; }
+  const a = document.querySelector('.view.active');
+  if(a && a.id !== 'v-city'){ go('city', document.querySelector('.tab[data-view="city"]')); return true; }
+  return false;
+};
+
+/* ================= boot ================= */
+document.querySelectorAll('.ic[data-ico]').forEach(el=>{ el.innerHTML = I[el.dataset.ico] || ''; });
+render();
+if(!S.tourDone) setTimeout(showTour, 450);
+offlineReport();
+S.lastSeen = Date.now(); save();
+setInterval(()=>{ render(); }, 15000);          // refresh accruing rent
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden){ render(); } });
+window.addEventListener('beforeunload', ()=>{ S.lastSeen = Date.now(); save(); });
+
+if('serviceWorker' in navigator && location.protocol.startsWith('http')){
+  navigator.serviceWorker.register('sw.js').catch(()=>{});
+}
+</script>
+</body>
+</html>
