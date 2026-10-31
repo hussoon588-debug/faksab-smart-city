@@ -146,7 +146,6 @@ def build_manifest():
         ('android', 'launchMode', 2),                 # singleTask
         ('android', 'windowSoftInputMode', 0x10),     # adjustResize
     ]
-    tree = ('manifest', None, [('versionCode', 2), ('versionName', '2.1.0')], None)
     # element(ns, name, attrs, children) with unqualified `package`
     order = ['versionCode', 'versionName', 'minSdkVersion', 'targetSdkVersion', 'label',
              'icon', 'roundIcon', 'name', 'exported', 'allowBackup', 'supportsRtl',
@@ -154,7 +153,7 @@ def build_manifest():
              'screenOrientation', 'configChanges', 'launchMode', 'windowSoftInputMode']
     b = AXML(order)
     b.start(None, 'manifest', [(None, 'package', 'com.faksab.smartcity')] +
-            [(ANDROID_NS, 'versionCode', 2), (ANDROID_NS, 'versionName', '2.1.0')])
+            [(ANDROID_NS, 'versionCode', 8), (ANDROID_NS, 'versionName', '8.2.4')])
     b.start(None, 'uses-permission',
             [(ANDROID_NS, 'name', 'android.permission.INTERNET')])
     b.end(None, 'uses-permission')
@@ -269,13 +268,26 @@ def main():
                               and 'rel="apple-touch-icon"' not in l)
     assets_index = assets_index.encode('utf-8')
 
+    # Every file the page needs goes into assets/www/ -- MainActivity serves that
+    # folder under https://appassets.androidplatform.net/ (file:// blocks modules).
+    web = {
+        'index.html': assets_index,
+        'setup.html': (ROOT / 'setup.html').read_bytes(),
+        'reset.html': (ROOT / 'reset.html').read_bytes(),
+        'manifest.json': (ROOT / 'manifest.json').read_bytes(),
+        'supabase/schema.sql': (ROOT / 'supabase/schema.sql').read_bytes(),
+        'src/supabase-world.js': (ROOT / 'src/supabase-world.js').read_bytes(),
+        'vendor/three.module.js': (ROOT / 'vendor/three.module.js').read_bytes(),
+        'vendor/OrbitControls.js': (ROOT / 'vendor/OrbitControls.js').read_bytes(),
+        'vendor/supabase.umd.js': (ROOT / 'vendor/supabase.umd.js').read_bytes(),
+    }
+
     entries = [
         ('resources.arsc', arsc, True),          # must stay first: 4-aligned + stored
         ('AndroidManifest.xml', manifest, False),
         ('classes.dex', (BUILD / 'dex/classes.dex').read_bytes(), False),
         ('res/mipmap-xxxhdpi/ic_launcher.png', icon, False),
-        ('assets/index.html', assets_index, False),
-    ]
+    ] + [('assets/www/' + name, data, False) for name, data in sorted(web.items())]
     unsigned = BUILD / 'app-unsigned.apk'
     write_zip(unsigned, entries)
 
