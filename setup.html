@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>إعداد المدينة المشتركة · فكسب</title>
+<style>
+  :root{--navy:#050d1f;--card:#0b1830;--gold:#f2c14e;--gold2:#d99b25;--txt:#e8eef8;--dim:#a9b8cf}
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 50% -10%,#10224a 0%,var(--navy) 60%);
+       color:var(--txt);font-family:system-ui,-apple-system,'Segoe UI',sans-serif;line-height:1.7;padding:20px 16px 48px}
+  .wrap{max-width:620px;margin:0 auto}
+  h1{font-size:22px;margin:0 0 6px;color:var(--gold);text-align:center}
+  .sub{text-align:center;color:var(--dim);font-size:14px;margin:0 0 22px}
+  .status{border-radius:14px;padding:14px 16px;margin:0 0 22px;font-size:15px;border:1px solid #1d3358;background:var(--card)}
+  .status b{color:var(--gold)}
+  .status.ok{border-color:#1f7a4d;background:#07231a}
+  .status.bad{border-color:#7a2b2b;background:#1e0c0c}
+  .step{background:var(--card);border:1px solid #16294a;border-radius:18px;padding:18px;margin:0 0 14px}
+  .step h2{font-size:16px;margin:0 0 6px;display:flex;gap:10px;align-items:center}
+  .num{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--gold),var(--gold2));
+       color:#08152c;font-weight:800;display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex:0 0 auto}
+  .step p{margin:6px 0 12px;color:var(--dim);font-size:14.5px}
+  a.btn,button.btn{display:block;width:100%;text-align:center;padding:15px 18px;border-radius:14px;border:0;
+       background:linear-gradient(135deg,var(--gold),var(--gold2));color:#08152c;font-weight:800;font-size:16px;
+       text-decoration:none;cursor:pointer;font-family:inherit;-webkit-tap-highlight-color:transparent}
+  button.ghost{background:#12233f;color:var(--txt);border:1px solid #24406e;margin-top:10px}
+  .hint{font-size:13px;color:#7e8ea8;margin:10px 0 0}
+  details{margin-top:12px}
+  summary{cursor:pointer;color:var(--gold);font-size:14px}
+  pre{margin:12px 0 0;max-height:260px;overflow:auto;background:#040a16;border:1px solid #16294a;border-radius:12px;
+      padding:12px;font-size:11.5px;line-height:1.55;direction:ltr;text-align:left;white-space:pre;color:#9fb3cf}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(140%);
+         background:#123a2a;border:1px solid #1f7a4d;color:#d7f5e6;padding:12px 20px;border-radius:12px;
+         font-size:14px;transition:transform .28s ease;z-index:9}
+  .toast.show{transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>المدينة المشتركة</h1>
+  <p class="sub">ثلاث خطوات قصيرة لتشغيل الأراضي بين جميع اللاعبين. ثوانٍ معدودة.</p>
+
+  <div class="status" id="status">جارٍ فحص حالة الإعداد…</div>
+
+  <div class="step">
+    <h2><span class="num">1</span> انسخ كود الإعداد</h2>
+    <p>كود واحد جاهز. اضغط الزر فيُنسخ كاملاً إلى الهاتف — لا تحتاج لفتح أي ملف.</p>
+    <button class="btn" id="copyBtn">نسخ الكود</button>
+    <details>
+      <summary>عرض الكود قبل نسخه</summary>
+      <pre id="sqlBox">جارٍ التحميل…</pre>
+    </details>
+  </div>
+
+  <div class="step">
+    <h2><span class="num">2</span> الصقه في محرر Supabase</h2>
+    <p>افتح المحرر، الصق في المربع الأبيض، ثم اضغط <b style="color:var(--gold)">Run</b> أسفل اليمين. تظهر رسالة نجاح خضراء.</p>
+    <a class="btn" id="editorLink" href="https://supabase.com/dashboard/project/ouihbvxevslmuvkzgchr/sql/new"
+       target="_blank" rel="noopener">افتح محرر SQL</a>
+    <p class="hint">إن ظهر «Sign in» — سجّل الدخول بنفس الحساب الذي أنشأت به المشروع.</p>
+  </div>
+
+  <div class="step">
+    <h2><span class="num">3</span> اسمح بالدخول المباشر</h2>
+    <p>أوقف تأكيد البريد الإلكتروني، حتى يُسجّل اللاعبون فوراً دون رسالة تحقق.</p>
+    <a class="btn" href="https://supabase.com/dashboard/project/ouihbvxevslmuvkzgchr/auth/providers"
+       target="_blank" rel="noopener">افتح إعدادات الدخول</a>
+    <p class="hint">Email ← أوقف <span style="direction:ltr;unicode-bidi:embed">Confirm email</span> ← Save.</p>
+  </div>
+
+  <button class="btn ghost" id="checkBtn">تحقّق من الإعداد الآن</button>
+</div>
+
+<div class="toast" id="toast">تم نسخ الكود</div>
+
+<script>
+(function () {
+  var SUPABASE_URL = 'https://ouihbvxevslmuvkzgchr.supabase.co';
+  var KEY = 'sb_publishable_1K3Ee2T5ITqegWIMbpN8OQ_LuOCS3dT';
+  var sqlText = '';
+  var box = document.getElementById('sqlBox');
+  var statusEl = document.getElementById('status');
+  var toast = document.getElementById('toast');
+  var toastTimer = null;
+
+  function flash(msg) {
+    toast.textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toast.classList.remove('show'); }, 2200);
+  }
+
+  fetch('./supabase/schema.sql', { cache: 'no-cache' })
+    .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
+    .then(function (t) { sqlText = t; box.textContent = t; })
+    .catch(function () { box.textContent = 'تعذر تحميل الملف — أعد فتح الصفحة.'; });
+
+  document.getElementById('copyBtn').addEventListener('click', function () {
+    if (!sqlText) { flash('الكود لم يُحمّل بعد، انتظر ثانية'); return; }
+    function legacy() {
+      var ta = document.createElement('textarea');
+      ta.value = sqlText;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.top = '-1000px';
+      document.body.appendChild(ta);
+      ta.select();
+      ta.setSelectionRange(0, sqlText.length);
+      var ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) {}
+      document.body.removeChild(ta);
+      flash(ok ? 'تم نسخ الكود' : 'حدّد الكود من «عرض الكود» وانسخه يدوياً');
+    }
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(sqlText).then(function () { flash('تم نسخ الكود'); }, legacy);
+    } else { legacy(); }
+  });
+
+  function setStatus(kind, html) {
+    statusEl.className = 'status' + (kind ? ' ' + kind : '');
+    statusEl.innerHTML = html;
+  }
+
+  function check() {
+    setStatus('', 'جارٍ الفحص…');
+    fetch(SUPABASE_URL + '/rest/v1/plots?select=city_id&limit=1', {
+      headers: { apikey: KEY, Authorization: 'Bearer ' + KEY }
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (body) {
+        var code = (body && (body.code || (Array.isArray(body) ? '' : body.code))) || '';
+        if (r.status === 404 || code === 'PGRST205') {
+          setStatus('bad', '<b>لم يُنفَّذ بعد.</b> نفّذ الخطوة 1 ثم 2 — خلال ثانيتين يصبح جاهزاً.');
+          return;
+        }
+        if (r.ok || code === '42501' || r.status === 401) {
+          setStatus('ok', '<b>جاهز.</b> الأراضي موجودة والمدينة المشتركة تعمل. افتح اللعبة وسجّل حساباً.');
+          return;
+        }
+        setStatus('bad', 'الرد: ' + r.status + ' ' + (code || '') + ' — أرسل هذه الرسالة لي.');
+      });
+    }).catch(function (e) {
+      setStatus('bad', 'تعذر الوصول إلى Supabase من هذا المتصفح: ' + e.message);
+    });
+  }
+
+  document.getElementById('checkBtn').addEventListener('click', check);
+  check();
+})();
+</script>
+</body>
+</html>
