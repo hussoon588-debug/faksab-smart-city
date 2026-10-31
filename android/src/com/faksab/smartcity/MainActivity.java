@@ -40,6 +40,10 @@ public class MainActivity extends Activity {
         s.setDatabaseEnabled(true);
         s.setAllowFileAccess(true);
         s.setAllowContentAccess(false);
+        // The game lives on file:///android_asset and talks to Firebase over HTTPS;
+        // without these two flags the WebView blocks every cross-origin request.
+        s.setAllowFileAccessFromFileURLs(true);
+        s.setAllowUniversalAccessFromFileURLs(true);
         s.setSupportZoom(false);
         s.setBuiltInZoomControls(false);
         s.setDisplayZoomControls(false);

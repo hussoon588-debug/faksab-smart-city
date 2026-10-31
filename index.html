@@ -107,41 +107,89 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
 
 /* city map */
 .city{position:relative;padding:14px;border-radius:16px;overflow:hidden;
-  background:radial-gradient(120% 100% at 50% 0%,#1b2534 0%,#101722 60%,#0b111a 100%);
-  border:1px solid rgba(255,255,255,.07);box-shadow:inset 0 0 40px rgba(0,0,0,.55)}
+  background:
+    radial-gradient(90% 70% at 12% 100%,rgba(255,176,74,.10),transparent 62%),
+    radial-gradient(85% 65% at 92% 0%,rgba(58,214,255,.11),transparent 60%),
+    linear-gradient(180deg,#182231 0%,#0f1722 55%,#0a0f17 100%);
+  border:1px solid rgba(255,255,255,.08);
+  box-shadow:inset 0 0 60px rgba(0,0,0,.6), 0 14px 32px rgba(0,0,0,.35)}
+.city::before{content:'';position:absolute;inset:0;z-index:0;pointer-events:none;
+  background:
+    repeating-linear-gradient(45deg,rgba(255,255,255,.014) 0 2px,transparent 2px 7px),
+    radial-gradient(78% 68% at 50% 44%,transparent 46%,rgba(0,0,0,.44) 100%)}
 .map{position:relative;z-index:2;display:grid;grid-template-columns:repeat(5,1fr);gap:14px}
 .roads{position:absolute;inset:0;z-index:1;pointer-events:none}
-.road{position:absolute;background:#232d3a;box-shadow:inset 0 0 6px rgba(0,0,0,.55)}
-.road.vr{border-left:1px solid rgba(255,255,255,.05);border-right:1px solid rgba(255,255,255,.05)}
-.road.hr{border-top:1px solid rgba(255,255,255,.05);border-bottom:1px solid rgba(255,255,255,.05)}
+.road{position:absolute;background:linear-gradient(90deg,#2b3644,#1d2531);
+  box-shadow:inset 0 0 8px rgba(0,0,0,.55), 0 0 0 1px rgba(0,0,0,.22)}
+.road.hr{background:linear-gradient(180deg,#2b3644,#1d2531)}
 .road.vr::after{content:'';position:absolute;left:50%;top:6px;bottom:6px;width:1px;transform:translateX(-50%);
-  background:repeating-linear-gradient(to bottom,rgba(255,210,74,.55) 0 7px,transparent 7px 16px)}
+  background:repeating-linear-gradient(to bottom,rgba(255,210,74,.62) 0 7px,transparent 7px 16px);
+  filter:drop-shadow(0 0 2px rgba(255,210,74,.45))}
 .road.hr::after{content:'';position:absolute;top:50%;left:6px;right:6px;height:1px;transform:translateY(-50%);
-  background:repeating-linear-gradient(to right,rgba(255,210,74,.55) 0 7px,transparent 7px 16px)}
-.car{position:absolute;border-radius:2px;z-index:3;
-  background:linear-gradient(180deg,#f4f7ff,#c6d0e2);
-  box-shadow:0 0 6px rgba(120,190,255,.55), 0 1px 2px rgba(0,0,0,.6)}
-.car::before{content:'';position:absolute;background:#ffd257;border-radius:1px;box-shadow:0 0 5px #ffd257}
+  background:repeating-linear-gradient(to right,rgba(255,210,74,.62) 0 7px,transparent 7px 16px);
+  filter:drop-shadow(0 0 2px rgba(255,210,74,.45))}
+.lamp{position:absolute;width:3px;height:3px;margin:-1.5px 0 0 -1.5px;border-radius:50%;background:#ffe9a8;
+  box-shadow:0 0 7px 2px rgba(255,210,74,.55), 0 0 16px 4px rgba(255,176,74,.16)}
+.car{position:absolute;border-radius:2.5px;z-index:3;
+  background:linear-gradient(180deg,#f7faff,#c2ccdd);
+  box-shadow:0 0 7px rgba(150,205,255,.5), 0 1px 2px rgba(0,0,0,.65)}
+.car::after{content:'';position:absolute;top:1px;left:2px;right:2px;height:1.5px;border-radius:1px;
+  background:rgba(18,38,66,.5)}
+.car::before{content:'';position:absolute;background:#ffd257;border-radius:1px;box-shadow:0 0 6px #ffd257}
 .car.hc{width:11px;height:5px;top:50%;margin-top:-2.5px;animation-name:driveX;animation-timing-function:linear;animation-iteration-count:infinite}
 .car.hc::before{width:2px;height:3px;right:0;top:1px}
 .car.vc{width:5px;height:11px;left:50%;margin-left:-2.5px;animation-name:driveY;animation-timing-function:linear;animation-iteration-count:infinite}
+.car.vc::after{top:2px;bottom:2px;left:1px;right:auto;width:1.5px;height:auto}
 .car.vc::before{width:3px;height:2px;left:1px;bottom:0}
 @keyframes driveX{from{left:-16px}to{left:100%}}
 @keyframes driveY{from{top:-16px}to{top:100%}}
-.plot .pricebadge{position:absolute;bottom:3px;left:50%;transform:translateX(-50%);font-size:8px;font-weight:900;
-  color:var(--gold);background:rgba(10,22,44,.85);border:1px solid rgba(255,210,74,.35);border-radius:5px;padding:0 4px;line-height:1.6}
 .plot{position:relative;aspect-ratio:1;border-radius:11px;padding:0;cursor:pointer;display:grid;place-items:center;overflow:hidden;
-  border:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.03);transition:transform .15s, box-shadow .2s}
+  border:1px solid rgba(255,255,255,.08);
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.012)),
+    radial-gradient(120% 100% at 50% 0%,rgba(58,214,255,.04),transparent 70%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.045), 0 2px 6px rgba(0,0,0,.28);
+  transition:transform .15s, box-shadow .2s, border-color .2s}
+.plot::before{content:'';position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(85% 62% at 50% 112%,rgba(0,0,0,.30),transparent 72%)}
 .plot:active{transform:scale(.94)}
-.plot svg{width:90%;height:90%;display:block;filter:drop-shadow(0 3px 5px rgba(0,0,0,.45))}
-.plot.built{background:linear-gradient(180deg,rgba(24,64,52,.75),rgba(8,24,20,.85));border-color:rgba(51,224,140,.32);box-shadow:inset 0 0 14px rgba(51,224,140,.12)}
-.plot.empty{border:1.5px dashed rgba(255,210,74,.5);background:rgba(255,210,74,.055);color:var(--gold)}
-.plot.empty svg{width:20px;height:20px;stroke:var(--gold);fill:none;stroke-width:1.6;opacity:.9}
-.plot.free{border:1px dashed rgba(255,255,255,.11);color:rgba(255,255,255,.16);background:rgba(255,255,255,.018)}
+.plot svg{width:90%;height:90%;display:block;filter:drop-shadow(0 4px 6px rgba(0,0,0,.5))}
+.plot.built{background:
+    radial-gradient(90% 70% at 50% 100%,rgba(51,224,140,.16),transparent 62%),
+    linear-gradient(180deg,#1b3d33,#0b201b);
+  border-color:rgba(51,224,140,.4);
+  box-shadow:inset 0 0 16px rgba(51,224,140,.14), 0 4px 12px rgba(0,0,0,.35)}
+.plot.built::after{content:'';position:absolute;left:7%;right:7%;bottom:2px;height:2px;border-radius:2px;
+  background:linear-gradient(90deg,transparent,rgba(51,224,140,.35),transparent)}
+.plot.built:nth-child(3n) svg{transform:scale(1.03) translateX(-1%)}
+.plot.built:nth-child(4n) svg{transform:scale(.97) translateY(1.5%)}
+.plot.empty{border:1.5px dashed rgba(255,210,74,.55);
+  background:
+    repeating-linear-gradient(45deg,rgba(255,210,74,.05) 0 6px,transparent 6px 12px),
+    rgba(255,210,74,.035);color:var(--gold)}
+.plot.empty svg{width:20px;height:20px;stroke:var(--gold);fill:none;stroke-width:1.6;opacity:.95;
+  filter:drop-shadow(0 0 6px rgba(255,210,74,.35))}
+.plot.free{border:1px dashed rgba(255,255,255,.13);color:rgba(255,255,255,.22);
+  background:
+    repeating-linear-gradient(-45deg,rgba(255,255,255,.03) 0 5px,transparent 5px 11px),
+    linear-gradient(180deg,#141c27,#0e141d)}
 .plot.free svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.6}
-.plot .rdy{position:absolute;top:4px;right:4px;width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 9px var(--green)}
-.plot .lvlbadge{position:absolute;bottom:2px;left:3px;font-size:8.5px;font-weight:900;color:#0a1a3a;background:var(--gold);
-  border-radius:5px;padding:0 4px;line-height:1.5}
+.plot.other{border-color:var(--oc-b,rgba(58,214,255,.3));
+  background:
+    radial-gradient(90% 70% at 50% 0%,var(--oc-bg,rgba(58,214,255,.12)),transparent 65%),
+    linear-gradient(180deg,#151f2e,#0b1420)}
+.plot.other .own{position:absolute;bottom:3px;left:3px;right:3px;font-size:8.5px;color:#dff1ff;font-weight:800;
+  background:rgba(4,10,22,.74);border:1px solid var(--oc-b,rgba(58,214,255,.3));border-radius:5px;
+  padding:0 3px;line-height:1.55;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.plot .olock svg{width:16px;height:16px;stroke:#7ee8ff;fill:none;stroke-width:1.6;opacity:.55}
+.plot .pricebadge{position:absolute;bottom:3px;left:50%;transform:translateX(-50%);font-size:8px;font-weight:900;
+  color:#3a2607;background:linear-gradient(180deg,#ffe07a,#f2a93b);
+  border:1px solid rgba(255,236,170,.7);border-radius:6px;padding:0 5px;line-height:1.6;
+  box-shadow:0 2px 6px rgba(0,0,0,.45)}
+.plot .rdy{position:absolute;top:4px;right:4px;width:7px;height:7px;border-radius:50%;background:var(--green);
+  box-shadow:0 0 9px var(--green), 0 0 18px rgba(51,224,140,.5)}
+.plot .lvlbadge{position:absolute;top:3px;left:3px;font-size:8.5px;font-weight:900;color:#0a1a3a;background:var(--gold);
+  border-radius:5px;padding:0 4px;line-height:1.5;box-shadow:0 2px 5px rgba(0,0,0,.4)}
 
 /* summary cards */
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -255,9 +303,72 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
 .dots i{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.18)}
 .dots i.on{background:var(--gold);box-shadow:0 0 8px var(--gold)}
 .tour-skip{background:none;border:0;color:var(--muted);font-family:inherit;font-size:11.5px;margin-top:10px;cursor:pointer}
+
+/* auth gate */
+#auth{position:fixed;inset:0;z-index:95;display:flex;align-items:center;justify-content:center;padding:20px;
+  background:
+    radial-gradient(700px 420px at 70% -10%, rgba(58,214,255,.16), transparent 60%),
+    radial-gradient(600px 420px at 10% 0%, rgba(255,210,74,.12), transparent 58%),
+    linear-gradient(180deg,#040a18,#07142e 55%,#050d1f);
+  overflow-y:auto;-webkit-overflow-scrolling:touch}
+#auth.hide{display:none}
+.auth-card{width:100%;max-width:380px;background:linear-gradient(180deg,rgba(18,42,88,.96),rgba(8,22,51,.98));
+  border:1px solid var(--line);border-radius:24px;padding:26px 20px 20px;text-align:center;
+  box-shadow:0 30px 70px rgba(0,0,0,.65), inset 0 1px 0 rgba(255,255,255,.06);margin:auto}
+.auth-card .logo-fa{margin:0}
+.auth-card .logo-en{font-size:13px;letter-spacing:4px;margin-top:0}
+.auth-sub{font-size:11.5px;color:#b7c9e8;margin:8px 0 18px}
+.auth-tabs{display:flex;gap:4px;background:rgba(4,10,24,.55);border:1px solid rgba(255,255,255,.07);
+  border-radius:14px;padding:4px;margin-bottom:14px}
+.auth-tabs button{flex:1;border:0;background:transparent;color:var(--muted);font-family:inherit;font-weight:800;
+  font-size:12.5px;padding:9px 0;border-radius:11px;cursor:pointer;transition:.18s}
+.auth-tabs button.on{background:linear-gradient(180deg,#ffe07a,#f2a93b);color:#0a1a3a}
+.auth-in{width:100%;margin-bottom:9px;padding:12px 13px;border-radius:13px;font-family:inherit;font-size:13.5px;
+  color:var(--txt);background:rgba(4,10,24,.62);border:1px solid rgba(126,232,255,.18);outline:none}
+.auth-in::placeholder{color:#7d90b3}
+.auth-in:focus{border-color:rgba(255,210,74,.55);box-shadow:0 0 0 3px rgba(255,210,74,.10)}
+.auth-err{min-height:17px;font-size:11.5px;color:var(--red);line-height:1.5;margin:2px 0 8px;font-weight:700}
+.auth-note{font-size:10.5px;color:#8fa3c4;line-height:1.8;margin-top:12px}
+.auth-note b{color:var(--gold)}
+.auth-spin{display:inline-block;width:13px;height:13px;border:2px solid rgba(10,26,58,.35);
+  border-top-color:#0a1a3a;border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px;margin-left:6px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.owner-chip{display:inline-flex;align-items:center;gap:5px;font-size:9px;font-weight:800;color:#7ee8ff;
+  background:rgba(58,214,255,.12);border:1px solid rgba(58,214,255,.3);border-radius:99px;padding:2px 6px;
+  max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.city-live{display:inline-flex;align-items:center;gap:5px;font-size:10px;color:#6bf0b3;font-weight:800}
+.city-live i{width:6px;height:6px;border-radius:50%;background:#33e08c;box-shadow:0 0 8px #33e08c;display:block}
+.city-live.off{color:#ff9a9a}
+.city-live.off i{background:#ff5a5a;box-shadow:0 0 8px #ff5a5a}
 </style>
 </head>
 <body>
+
+<!-- ===== auth gate ===== -->
+<div id="auth">
+  <div class="auth-card">
+    <div class="logo-fa">فكسب</div>
+    <div class="logo-en">SMART CITY</div>
+    <div class="auth-sub">مدينة واحدة مشتركة · كل اللاعبين فيها</div>
+    <div class="auth-tabs">
+      <button id="tabLogin" class="on" onclick="authMode('login')">تسجيل الدخول</button>
+      <button id="tabReg" onclick="authMode('reg')">حساب جديد</button>
+    </div>
+    <div id="authNameWrap" style="display:none">
+      <input id="auName" class="auth-in" maxlength="24" placeholder="اسمك في المدينة" autocomplete="nickname">
+    </div>
+    <input id="auEmail" class="auth-in" type="email" inputmode="email" placeholder="البريد الإلكتروني"
+      autocomplete="email" dir="ltr" spellcheck="false">
+    <input id="auPass" class="auth-in" type="password" placeholder="كلمة المرور (6 أحرف على الأقل)"
+      autocomplete="current-password" dir="ltr">
+    <div id="authErr" class="auth-err"></div>
+    <button id="authBtn" class="btn btn-gold" onclick="doAuth()">دخول إلى المدينة</button>
+    <div class="auth-note">مدينتك <b>مشتركة مع كل اللاعبين</b> على السيرفر — كل قطعة أرض يملكها لاعب واحد فقط،
+      وترتيب المستويات والعملات يُحفظ في حسابك ويفتح من أي جهاز.</div>
+    <button class="btn btn-ghost" style="margin-top:10px" onclick="playOffline()">العب بدون حساب · مدينة محلية</button>
+  </div>
+</div>
+
 <div class="app">
 
   <!-- TOP BAR -->
@@ -325,7 +436,9 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
   <!-- VIEW: CITY -->
   <div class="view active" id="v-city">
     <div class="panel">
-      <div class="phead"><div class="ptitle"><span class="dot"></span> خريطة المدينة</div><span class="pmeta" id="mapMeta">0 من 50</span></div>
+      <div class="phead"><div class="ptitle"><span class="dot"></span> خريطة المدينة</div>
+        <span style="display:flex;align-items:center;gap:8px"><span class="city-live" id="liveDot"><i></i> مباشر</span>
+        <span class="pmeta" id="mapMeta">0 من 50</span></span></div>
       <div class="city" id="cityBox">
         <div class="roads" id="roads"></div>
         <div class="map" id="mapGrid"></div>
@@ -435,6 +548,107 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
 <div id="tour"><div class="tour-card" id="tourCard"></div></div>
 
 <script>
+/* ================= firebase (REST) ================= */
+/* المفتاح هنا ليس سراً — كل تطبيقات Firebase تحمله داخل العميل؛ الحماية في قواعد Firestore. */
+const FB = {
+  apiKey:'AIzaSyB5gb6nuokkXavJMVo0-SSh5G8cia3Tvu0',
+  projectId:'faksab-smart-city',
+  appId:'1:347417160032:android:d7f648e84cf84843e45605'
+};
+const AUTH_STORE = 'faksab_auth';
+const cloud = { token:'', rt:'', uid:'', email:'', name:'', exp:0, online:false, busy:false };
+
+/* --- Firestore typed values --- */
+function objToFields(o){ const f={}; for(const k in o){ if(o[k]!==undefined) f[k]=fv(o[k]); } return f; }
+function fv(v){
+  if(v === null || v === undefined) return {nullValue:null};
+  if(typeof v === 'boolean') return {booleanValue:v};
+  if(typeof v === 'number') return Number.isInteger(v) ? {integerValue:String(v)} : {doubleValue:v};
+  if(Array.isArray(v)) return {arrayValue:{values:v.map(fv)}};
+  if(typeof v === 'object'){ const f={}; for(const k in v) f[k]=fv(v[k]); return {mapValue:{fields:f}}; }
+  return {stringValue:String(v)};
+}
+function unv(v){
+  if(!v) return null;
+  if('nullValue' in v) return null;
+  if('booleanValue' in v) return v.booleanValue;
+  if('integerValue' in v) return parseInt(v.integerValue,10);
+  if('doubleValue' in v) return v.doubleValue;
+  if('stringValue' in v) return v.stringValue;
+  if('timestampValue' in v) return Date.parse(v.timestampValue);
+  if('arrayValue' in v) return (v.arrayValue.values||[]).map(unv);
+  if('mapValue' in v){ const o={}; const f=v.mapValue.fields||{}; for(const k in f) o[k]=unv(f[k]); return o; }
+  return null;
+}
+function docToObj(d){
+  const o={}, f=d.fields||{}; for(const k in f) o[k]=unv(f[k]);
+  o.__updateTime = d.updateTime; return o;
+}
+
+async function api(url, opts){
+  const r = await fetch(url, opts);
+  const txt = await r.text();
+  let j=null; try{ j = txt ? JSON.parse(txt) : null; }catch(e){}
+  if(!r.ok){
+    const e = new Error((j && j.error && (j.error.message || j.error.status)) || ('HTTP '+r.status));
+    e.status = r.status; e.body = j; throw e;
+  }
+  return j;
+}
+const IDT = p => `https://identitytoolkit.googleapis.com/v1/${p}?key=${FB.apiKey}`;
+const FS  = p => `https://firestore.googleapis.com/v1/projects/${FB.projectId}/databases/(default)/documents/${p}`;
+const DOC = p => `projects/${FB.projectId}/databases/(default)/documents/${p}`;
+
+const authSignUp = (email,password) => api(IDT('accounts:signUp'), {method:'POST',
+  headers:{'Content-Type':'application/json'}, body:JSON.stringify({email,password,returnSecureToken:true})});
+const authSignIn = (email,password) => api(IDT('accounts:signInWithPassword'), {method:'POST',
+  headers:{'Content-Type':'application/json'}, body:JSON.stringify({email,password,returnSecureToken:true})});
+async function authRefresh(rt){
+  const j = await api(`https://securetoken.googleapis.com/v1/token?key=${FB.apiKey}`, {method:'POST',
+    headers:{'Content-Type':'application/json'}, body:JSON.stringify({grant_type:'refresh_token',refresh_token:rt})});
+  return {idToken:j.id_token, refreshToken:j.refresh_token, expiresIn:+j.expires_in||3600, uid:j.user_id};
+}
+
+function authPersist(){
+  try{
+    localStorage.setItem(AUTH_STORE, JSON.stringify({uid:cloud.uid, email:cloud.email, name:cloud.name, rt:cloud.rt, exp:cloud.exp}));
+  }catch(e){}
+}
+function authForget(){
+  try{ localStorage.removeItem(AUTH_STORE); }catch(e){}
+  cloud.token=''; cloud.rt=''; cloud.uid=''; cloud.email=''; cloud.name=''; cloud.exp=0; cloud.online=false;
+}
+async function ensureToken(){
+  if(cloud.token && Date.now() < cloud.exp - 240000) return cloud.token;
+  const raw = localStorage.getItem(AUTH_STORE);
+  if(!raw) throw new Error('NO_SESSION');
+  const a = JSON.parse(raw);
+  const j = await authRefresh(a.rt);
+  cloud.token = j.idToken; cloud.rt = j.refreshToken;
+  cloud.uid = j.uid || a.uid; cloud.email = a.email || cloud.email;
+  cloud.exp = Date.now() + j.expiresIn*1000;
+  authPersist();
+  return cloud.token;
+}
+async function fsGet(path, mask, extra){
+  const t = await ensureToken();
+  const q = (mask||[]).map(m=>'mask.fieldPaths='+encodeURIComponent(m)).concat(extra||[]).join('&');
+  return api(FS(path) + (q?('?'+q):''), {headers:{Authorization:'Bearer '+t}});
+}
+async function fsCommit(writes){
+  const t = await ensureToken();
+  return api(FS(':commit'), {method:'POST',
+    headers:{'Content-Type':'application/json', Authorization:'Bearer '+t},
+    body: JSON.stringify({writes})});
+}
+async function fsPatch(path, fields){
+  const t = await ensureToken();
+  const mask = Object.keys(fields).map(k=>'updateMask.fieldPaths='+encodeURIComponent(k)).join('&');
+  return api(FS(path)+'?'+mask, {method:'PATCH',
+    headers:{'Content-Type':'application/json', Authorization:'Bearer '+t},
+    body: JSON.stringify({fields:objToFields(fields)})});
+}
+
 /* ================= config ================= */
 const HOUSES = {
   small:  {id:'small',  name:'بيت صغير',  build:1000, minLvl:3, rent:14, value:1500, exp:50, tenants:1},
@@ -511,7 +725,10 @@ function load(){
     return s;
   }catch(e){ return Object.assign({}, DEF); }
 }
-function save(){ try{ localStorage.setItem('faksab_v1', JSON.stringify(S)); }catch(e){} }
+function save(){
+  try{ localStorage.setItem('faksab_v1', JSON.stringify(S)); }catch(e){}
+  try{ schedulePush(); }catch(e){}
+}
 
 /* ================= helpers ================= */
 const fmt = n => Math.floor(n).toLocaleString('en-US');
@@ -577,14 +794,7 @@ function checkLevelUp(silent){
 }
 
 /* ================= actions ================= */
-function buyLand(){
-  if(S.lands >= MAX_LANDS){ SFX.err(); return toast('كل الأراضي مُباعة حالياً', 'bad'); }
-  if(S.coins < LAND_PRICE){ SFX.err(); return toast('عملاتك لا تكفي — تحتاج 500 عملة', 'bad'); }
-  S.coins -= LAND_PRICE; S.lands++;
-  addXP(25); SFX.buy(); vibrate(15);
-  save(); render();
-  toast('تم شراء قطعة أرض · +25 خبرة', 'ok');
-}
+function buyLand(){ claimPlot().catch(()=>{}); }
 
 function canBuild(type){
   const h = HOUSES[type];
@@ -595,60 +805,81 @@ function canBuild(type){
   return null;
 }
 
-function build(type){
+async function build(type, plot){
   const err = canBuild(type);
   if(err){ SFX.err(); return toast(err, 'bad'); }
+  const idx = (plot !== undefined && plot !== null) ? plot : myEmptyPlot();
+  if(idx === undefined || idx === null || !CITY[idx] || CITY[idx].owner !== cloud.uid){
+    SFX.err(); return toast('تحتاج قطعة أرض فارغة — اشترِ أرضاً أولاً', 'bad');
+  }
   const h = HOUSES[type];
   /* خبرة البناء بحسب قانون النشاط: أول بيت 100، الثاني 50، الثالث وما بعده 25 */
   const nBefore = S.houses.length;
   const gain = nBefore === 0 ? 100 : nBefore === 1 ? 50 : 25;
   S.coins -= h.build;
-  S.houses.push({id:S.nextId++, type, lvl:1, collectedAt:Date.now(), built:Date.now()});
   S.tasks.build++; S.built++;
   addXP(gain); SFX.build(); vibrate(25);
-  closeSheet(); save(); render();
-  toast(`تم بناء ${h.name} · +${gain} خبرة`, 'ok');
+  closeSheet(); render();
+  try{
+    await writePlot(idx, {type, lvl:1, built:Date.now(), collectedAt:Date.now()});
+  }catch(e){
+    S.coins += h.build; S.tasks.build--; S.built--; addXP(-gain, true);
+    render(); toast('تعذّر البناء — تحقق من الاتصال', 'bad'); return;
+  }
+  save(); render();
+  toast(`تم بناء ${h.name} على قطعة ${idx+1} · +${gain} خبرة`, 'ok');
 }
 
-function upgrade(id){
+async function upgrade(id){
   const hs = S.houses.find(h=>h.id===id); if(!hs) return;
   if(hs.lvl >= 3){ SFX.err(); return toast('هذا العقار بأعلى مستوى تطوير', 'bad'); }
   const cost = upgradeCost(hs);
   if(S.coins < cost){ SFX.err(); return toast('عملاتك لا تكفي للتطوير', 'bad'); }
-  S.coins -= cost; hs.lvl++;
+  S.coins -= cost;
   addXP(20); SFX.build(); vibrate(20);
-  closeSheet(); save(); render();
-  toast(`تم التطوير إلى مستوى ${hs.lvl} · +20 خبرة`, 'ok');
+  closeSheet(); render();
+  try{ await writePlot(hs.plot, {lvl: hs.lvl+1}); }
+  catch(e){ S.coins += cost; render(); return toast('تعذّر التطوير — تحقق من الاتصال', 'bad'); }
+  save(); render();
+  toast(`تم التطوير إلى مستوى ${hs.lvl+1} · +20 خبرة`, 'ok');
 }
 const upgradeCost = hs => Math.round(HOUSES[hs.type].build * 0.5 * hs.lvl);
 
-function collect(id){
+async function collect(id){
   const hs = S.houses.find(h=>h.id===id); if(!hs) return 0;
   const amount = rentAmount(hs);
   if(amount < 1){ SFX.err(); return toast('لم يتراكم إيجار بعد', 'bad'); }
-  hs.collectedAt = Date.now();
+  const now = Date.now();
   addCoins(amount); S.rents++; S.tasks.rent++;
   addXP(30); SFX.coin(); vibrate(18);
   closeSheet(); save(); render();
+  try{ await writePlot(hs.plot, {collectedAt: now}); }
+  catch(e){ S.coins -= amount; render(); return toast('تعذّر الحفظ — تحقق من الاتصال', 'bad'); }
+  save(); render();
   toast(`+${fmt(amount)} عملة إيجار · +30 خبرة`, 'ok');
   return amount;
 }
 
-function collectAll(){
+async function collectAll(){
   const ready = S.houses.filter(h=>rentAmount(h) >= 1);
   if(!ready.length){ SFX.err(); return toast('لا يوجد إيجار جاهز الآن', 'bad'); }
+  const now = Date.now();
   let sum = 0, last = 0;
+  const writes = [];
   ready.forEach(h=>{
-    const amt = rentAmount(h);
-    h.collectedAt = Date.now();
-    sum += amt; last += 30;
+    sum += rentAmount(h); last += 30;
+    writes.push({
+      update:{ name: DOC('plots/p'+h.plot), fields: objToFields({collectedAt: now}) },
+      updateMask:{ fieldPaths:['collectedAt'] }
+    });
   });
-  addCoins(sum);
-  S.rents += ready.length;
-  S.tasks.rent += ready.length;
+  addCoins(sum); S.rents += ready.length; S.tasks.rent += ready.length;
   addXP(last);
   SFX.coin(); vibrate(25);
   closeSheet(); save(); render();
+  try{ await ensureToken(); await fsCommit(writes); }
+  catch(e){ S.coins -= sum; render(); return toast('تعذّر الحفظ — تحقق من الاتصال', 'bad'); }
+  await pullCity();
   toast(`جمعت ${fmt(sum)} عملة من ${ready.length} عقار`, 'ok');
 }
 
@@ -657,11 +888,13 @@ function sell(id){
   /* السعر المرجعي للعقار الجاهز × التطوير، ثم تُخصم عمولة البيع 10% من البائع */
   const price = Math.round(HOUSES[hs.type].value * (1 + .35*(hs.lvl-1)) * 0.9);
   confirmSheet('بيع العقار',
-    `سيتم بيع ${HOUSES[hs.type].name} (تطوير ${hs.lvl}) بمبلغ ${fmt(price)} عملة بعد عمولة 10%.`,
-    'بيع الآن', ()=>{
-      S.houses = S.houses.filter(h=>h.id!==id);
+    `سيتم بيع ${HOUSES[hs.type].name} (تطوير ${hs.lvl}) بمبلغ ${fmt(price)} عملة بعد عمولة 10%. الأرض تبقى ملكك.`,
+    'بيع الآن', async ()=>{
       addCoins(price); S.sold++; S.tasks.sell++;
       addXP(40); SFX.coin(); vibrate(20);
+      render();
+      try{ await writePlot(hs.plot, {type:'', lvl:0, built:0, collectedAt:0}); }
+      catch(e){ S.coins -= price; S.sold--; render(); return toast('تعذّر البيع — تحقق من الاتصال', 'bad'); }
       save(); render();
       toast(`تم البيع · +${fmt(price)} عملة · +40 خبرة`, 'ok');
     });
@@ -694,6 +927,7 @@ function claimTasks(){
 
 function rentRate(hs){ return HOUSES[hs.type].rent * (1 + .5*(hs.lvl-1)); }   // per hour
 function rentAmount(hs){
+  if(!hs || !HOUSES[hs.type]) return 0;
   const secs = Math.min((Date.now()-(hs.collectedAt||Date.now()))/1000, RENT_CAP);
   return Math.floor(rentRate(hs) * secs / 3600);
 }
@@ -716,8 +950,19 @@ function confirmSheet(title, text, okLabel, onOk){
 }
 
 function plotSheet(i){
-  if(i >= S.lands){ buyLand(); return; }             // unowned plot → buy
-  const house = S.houses[i];
+  const p = CITY[i];
+  if(p && p.owner && p.owner !== cloud.uid){          // ملك لاعب آخر
+    const H = p.type ? HOUSES[p.type] : null;
+    openSheet(`<h3>قطعة ${i+1} · ${p.name || p.ownerName || 'لاعب'}</h3>
+      <div class="art">${H ? houseArt(p.type) : I.lock}</div>
+      <div class="kv"><span>المالك</span><b>${p.name || p.ownerName || 'لاعب آخر'}</b></div>
+      <div class="kv"><span>العقار</span><b>${H ? H.name + ' · تطوير ' + (p.lvl||1) : 'أرض فارغة'}</b></div>
+      <p style="color:var(--muted);font-size:11.5px;margin-top:10px">هذه القطعة يملكها لاعب آخر في المدينة — لا يمكن شراؤها الآن.</p>
+      <button class="btn btn-ghost" style="margin-top:12px" onclick="closeSheet()">إغلاق</button>`);
+    return;
+  }
+  if(!p || !p.owner){ claimPlot(i); return; }         // أرض حرة → شراء
+  const house = S.houses.find(h=>h.plot === i);
   if(!house){                                         // empty owned plot
     openSheet(`<h3>قطعة أرض فارغة</h3><p>اختر نوع العقار الذي تريد بناءه على هذه القطعة.</p>
       <div class="grid3">${Object.values(HOUSES).map(H=>{
@@ -727,7 +972,7 @@ function plotSheet(i){
           <div class="art">${houseArt(H.id)}</div><h4>${H.name}</h4>
           <div class="price">${fmt(H.build)}</div>
           <button class="btn ${err?'btn-ghost':'btn-gold'} sm" style="margin-top:8px;width:100%"
-            onclick="tryBuild('${H.id}')" ${err?'disabled':''}>${err?'مقفل':'ابنِ'}</button>
+            onclick="tryBuild('${H.id}',${i})" ${err?'disabled':''}>${err?'مقفل':'ابنِ'}</button>
         </div>`;
       }).join('')}</div>
       <button class="btn btn-ghost" style="margin-top:12px" onclick="closeSheet()">إغلاق</button>`);
@@ -746,10 +991,10 @@ function plotSheet(i){
       <button class="btn btn-red" onclick="sell(${house.id})">بيع</button>
     </div>`);
 }
-function tryBuild(type){
+function tryBuild(type, plot){
   const err = canBuild(type);
   if(err){ SFX.err(); return toast(err, 'bad'); }
-  build(type);
+  build(type, plot).catch(()=>toast('تعذّر البناء — تحقق من الاتصال', 'bad'));
 }
 
 /* settings */
@@ -759,8 +1004,10 @@ function openSettings(){
       <button class="btn btn-ghost sm" onclick="toggleSound()">${S.sound?'مفعّل':'مغلق'}</button></div>
     <div class="row"><div class="ic">${I.star}</div><div class="tx"><b>الاهتزاز</b><span>استجابة لمسية</span></div>
       <button class="btn btn-ghost sm" onclick="toggleHaptics()">${S.haptics?'مفعّل':'مغلق'}</button></div>
-    <div class="row"><div class="ic">${I.info}</div><div class="tx"><b>الإصدار</b><span>فكسب سمارت سيتي · لعبة بلا إنترنت</span></div><div class="val">${VERSION}</div></div>
+    <div class="row"><div class="ic">${I.info}</div><div class="tx"><b>الإصدار</b><span>فكسب سمارت سيتي · مدينة مشتركة مباشرة</span></div><div class="val">${VERSION}</div></div>
+    <div class="row"><div class="ic">${I.crown}</div><div class="tx"><b>${cloud.name || 'لاعب'}</b><span>${cloud.email || 'غير مسجّل'}</span></div></div>
     <button class="btn btn-ghost" style="margin-top:12px" onclick="closeSheet()">إغلاق</button>
+    <button class="btn btn-ghost" style="margin-top:8px" onclick="closeSheet();logout()">تسجيل الخروج</button>
     <button class="btn btn-red" style="margin-top:8px" onclick="resetGame()">حذف التقدّم والبدء من جديد</button>`);
 }
 function toggleSound(){ S.sound = !S.sound; save(); SFX.tap(); openSettings(); }
@@ -769,7 +1016,8 @@ function resetGame(){
   confirmSheet('حذف التقدّم','سيُحذف كل شيء: العملات، الأراضي، العقارات، المستوى. لا يمكن التراجع.','حذف نهائي',()=>{
     localStorage.removeItem('faksab_v1');
     S = Object.assign({}, DEF); S.tourDone = true;
-    save(); render();
+    S.ach = {}; S.name = cloud.name;
+    save(); render(); pushUser().catch(()=>{});
     toast('بدأت من جديد', 'ok');
   });
 }
@@ -819,44 +1067,108 @@ function offlineReport(){
 }
 
 /* ================= art ================= */
+function esc(s){return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function ownerHue(uid){ let h = 0; const s = String(uid || ''); for(let i=0;i<s.length;i++) h = (h*31 + s.charCodeAt(i)) % 360; return h; }
 function houseArt(type){
   if(type==='luxury') return `<svg viewBox="0 0 120 90">
-    <defs><linearGradient id="l1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe9a8"/><stop offset="1" stop-color="#e0a63a"/></linearGradient></defs>
-    <ellipse cx="60" cy="82" rx="46" ry="7" fill="#000" opacity=".28"/>
-    <rect x="18" y="42" width="84" height="36" rx="3" fill="#f6e2b6"/>
-    <rect x="14" y="34" width="92" height="12" rx="3" fill="url(#l1)"/>
-    <rect x="26" y="48" width="16" height="16" rx="2" fill="#7ee8ff" opacity=".85"/>
-    <rect x="52" y="48" width="16" height="22" rx="2" fill="#0d2750"/>
-    <rect x="78" y="48" width="16" height="16" rx="2" fill="#7ee8ff" opacity=".85"/>
-    <rect x="46" y="12" width="28" height="24" rx="3" fill="#f2cf7c"/>
-    <path d="M42 12 L60 2 L78 12 Z" fill="url(#l1)"/>
-    <rect x="56" y="18" width="8" height="10" rx="1.5" fill="#0d2750"/>
-    <g stroke="#7fd6a8" stroke-width="2" stroke-linecap="round">
-      <path d="M10 78 V62"/><path d="M10 62 q-7 -4 -7 -11 q7 1 7 11"/><path d="M10 62 q7 -4 7 -11 q-7 1 -7 11"/>
-      <path d="M110 78 V66"/><path d="M110 66 q-6 -3 -6 -9 q6 1 6 9"/><path d="M110 66 q6 -3 6 -9 q-6 1 -6 9"/>
-    </g></svg>`;
+    <defs>
+      <linearGradient id="l1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe9a8"/><stop offset="1" stop-color="#dfa437"/></linearGradient>
+      <linearGradient id="l2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff7e2"/><stop offset="1" stop-color="#ecd9ae"/></linearGradient>
+      <linearGradient id="l3" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a9f0ff"/><stop offset="1" stop-color="#2aa7cf"/></linearGradient>
+    </defs>
+    <ellipse cx="60" cy="84" rx="48" ry="6" fill="#000" opacity=".32"/>
+    <ellipse cx="60" cy="78" rx="26" ry="7" fill="#0b2b45"/>
+    <ellipse cx="60" cy="77.5" rx="23" ry="5.4" fill="url(#l3)" opacity=".92"/>
+    <g stroke="#e8fbff" stroke-width=".8" opacity=".5"><path d="M44 76h10M60 79h12M47 80h8"/></g>
+    <rect x="16" y="52" width="10" height="22" rx="2" fill="#f3e3bd"/>
+    <rect x="94" y="52" width="10" height="22" rx="2" fill="#e6d3a8"/>
+    <rect x="26" y="40" width="68" height="32" rx="3" fill="url(#l2)"/>
+    <path d="M94 40l8-4v32l-8 4z" fill="#d9c08b"/>
+    <rect x="20" y="33" width="80" height="10" rx="3" fill="url(#l1)"/>
+    <rect x="20" y="42" width="80" height="3" fill="#b9852a" opacity=".8"/>
+    <g fill="#fff3d6"><rect x="30" y="45" width="4" height="27" rx="1"/><rect x="52" y="45" width="4" height="27" rx="1"/><rect x="66" y="45" width="4" height="27" rx="1"/><rect x="88" y="45" width="4" height="27" rx="1"/></g>
+    <rect x="40" y="52" width="18" height="20" rx="2" fill="#3a2a10"/>
+    <rect x="42" y="54" width="14" height="16" rx="1.5" fill="#7a5a1e"/>
+    <circle cx="54" cy="62" r="1.2" fill="#ffd24a"/>
+    <rect x="73" y="49" width="13" height="13" rx="2" fill="#0b2b45"/>
+    <rect x="74" y="50" width="11" height="11" rx="1.5" fill="url(#l3)" opacity=".95"/>
+    <rect x="42" y="16" width="36" height="18" rx="2" fill="#f6e6bf"/>
+    <path d="M38 16L60 4l22 12z" fill="url(#l1)"/>
+    <rect x="56" y="7" width="8" height="9" rx="1.4" fill="#0b2b45"/>
+    <circle cx="60" cy="11.5" r="2.2" fill="#4fc6ea" opacity=".9"/>
+    <g stroke="#2f9c6a" stroke-width="2" stroke-linecap="round" fill="none">
+      <path d="M10 80V60"/><path d="M10 60q-8-4-9-13q8 2 9 13"/><path d="M10 60q8-4 9-13q-8 2-9 13"/>
+      <path d="M110 80V63"/><path d="M110 63q-7-3-8-11q7 1 8 11"/><path d="M110 63q7-3 8-11q-7 1-8 11"/>
+    </g>
+    <circle cx="60" cy="2.5" r="1.8" fill="#ffd24a"/></svg>`;
   if(type==='medium') return `<svg viewBox="0 0 120 90">
-    <defs><linearGradient id="m1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#bcd9ff"/><stop offset="1" stop-color="#5b8fd6"/></linearGradient></defs>
-    <ellipse cx="60" cy="82" rx="42" ry="6" fill="#000" opacity=".28"/>
-    <rect x="22" y="46" width="76" height="32" rx="3" fill="#dfeaff"/>
-    <rect x="18" y="40" width="84" height="9" rx="3" fill="url(#m1)"/>
-    <rect x="34" y="16" width="52" height="24" rx="3" fill="#eef5ff"/>
-    <rect x="28" y="10" width="64" height="9" rx="3" fill="url(#m1)"/>
-    <rect x="40" y="22" width="12" height="12" rx="2" fill="#7ee8ff"/>
-    <rect x="60" y="22" width="12" height="12" rx="2" fill="#7ee8ff"/>
-    <rect x="54" y="54" width="14" height="24" rx="2" fill="#0d2750"/>
-    <rect x="30" y="54" width="12" height="12" rx="2" fill="#9fd2ff" opacity=".9"/>
-    <rect x="78" y="54" width="12" height="12" rx="2" fill="#9fd2ff" opacity=".9"/></svg>`;
+    <defs>
+      <linearGradient id="m1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#cfe4ff"/><stop offset="1" stop-color="#5b8fd6"/></linearGradient>
+      <linearGradient id="m2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f6fbff"/><stop offset="1" stop-color="#cfdeef"/></linearGradient>
+      <linearGradient id="m3" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#bff2ff"/><stop offset="1" stop-color="#4fc6ea"/></linearGradient>
+    </defs>
+    <ellipse cx="60" cy="83" rx="44" ry="6.5" fill="#000" opacity=".32"/>
+    <rect x="12" y="72" width="96" height="12" rx="4" fill="#182a3f" opacity=".7"/>
+    <path d="M22 48h60v32H22z" fill="url(#m2)"/>
+    <path d="M82 48l12-6v32l-12 6z" fill="#a8bdd4"/>
+    <rect x="18" y="43" width="70" height="6" rx="2" fill="url(#m1)"/>
+    <rect x="30" y="16" width="48" height="27" rx="2" fill="#eef6ff"/>
+    <path d="M78 16l9-4v27l-9 4z" fill="#b7c9dc"/>
+    <rect x="26" y="12" width="58" height="6" rx="2" fill="url(#m1)"/>
+    <g stroke="#8fb0cd" stroke-width="1.6" opacity=".8"><path d="M28 12V8M42 12V8M56 12V8M70 12V8M84 12V8M26 8h60"/></g>
+    <rect x="36" y="22" width="14" height="13" rx="2" fill="url(#m3)"/>
+    <rect x="58" y="22" width="14" height="13" rx="2" fill="url(#m3)"/>
+    <path d="M43 22v13M36 28.5h14M65 22v13M58 28.5h14" stroke="#2b5f86" stroke-width="1" opacity=".7"/>
+    <rect x="54" y="40" width="24" height="3" rx="1" fill="#9fb6cc"/>
+    <g stroke="#9fb6cc" stroke-width="1.4"><path d="M56 40v7M62 40v7M68 40v7M74 40v7M54 47h24"/></g>
+    <rect x="42" y="56" width="16" height="24" rx="2" fill="#123a5c"/>
+    <rect x="44.5" y="59" width="11" height="9" rx="1.4" fill="#57a3cc"/>
+    <circle cx="55" cy="68" r="1.2" fill="#ffd24a"/>
+    <rect x="68" y="58" width="22" height="22" rx="2" fill="#1a3a58"/>
+    <g stroke="#4d7fa3" stroke-width="1"><path d="M70 63h18M70 68h18M70 73h18M70 78h18"/></g>
+    <rect x="26" y="56" width="10" height="10" rx="1.8" fill="url(#m3)" opacity=".9"/>
+    <g stroke="#3f9c74" stroke-width="2" stroke-linecap="round" fill="none"><path d="M15 82V66"/></g>
+    <circle cx="15" cy="61" r="7" fill="#2f9c6a" opacity=".85"/>
+    <circle cx="11" cy="64" r="5" fill="#37a877" opacity=".8"/>
+    <circle cx="19" cy="64" r="5" fill="#37a877" opacity=".8"/></svg>`;
   return `<svg viewBox="0 0 120 90">
-    <defs><linearGradient id="s1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a8e6c8"/><stop offset="1" stop-color="#3f9c74"/></linearGradient></defs>
-    <ellipse cx="60" cy="82" rx="38" ry="6" fill="#000" opacity=".28"/>
-    <rect x="26" y="46" width="68" height="32" rx="3" fill="#e6f7ee"/>
-    <path d="M18 46 L60 16 L102 46 Z" fill="url(#s1)"/>
-    <path d="M50 46 L60 16 L70 46 Z" fill="#ffffff" opacity=".12"/>
-    <rect x="52" y="56" width="16" height="22" rx="2" fill="#0d2750"/>
-    <rect x="34" y="54" width="11" height="11" rx="2" fill="#9fe8ff"/>
-    <rect x="76" y="54" width="11" height="11" rx="2" fill="#9fe8ff"/>
-    <circle cx="60" cy="10" r="2.5" fill="#ffd24a"/></svg>`;
+    <defs>
+      <linearGradient id="s1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#bfead4"/><stop offset="1" stop-color="#3f9c74"/></linearGradient>
+      <linearGradient id="s2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f7fdfa"/><stop offset="1" stop-color="#c8e2d6"/></linearGradient>
+      <linearGradient id="s3" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe9a8"/><stop offset="1" stop-color="#ffc94d"/></linearGradient>
+    </defs>
+    <ellipse cx="60" cy="83" rx="44" ry="6.5" fill="#000" opacity=".32"/>
+    <rect x="12" y="70" width="96" height="14" rx="4" fill="#12332a" opacity=".65"/>
+    <g stroke="#9fe6c6" stroke-width="1.2" opacity=".45" stroke-linecap="round">
+      <path d="M14 78v-9M20 78v-9M26 78v-9M92 78v-9M98 78v-9M104 78v-9"/>
+    </g>
+    <path d="M28 46h58v30H28z" fill="url(#s2)"/>
+    <path d="M86 46l8-4v30l-8 4z" fill="#a9c9bb"/>
+    <path d="M18 47L58 16h6l38 31z" fill="url(#s1)"/>
+    <path d="M18 47h86v5H18z" fill="#2c7a5a"/>
+    <path d="M48 47L61 16l4 1 9 30z" fill="#fff" opacity=".1"/>
+    <g stroke="#2f8764" stroke-width=".8" opacity=".35"><path d="M28 36h64M34 29h52M40 22h40"/></g>
+    <rect x="74" y="24" width="7" height="13" rx="1.5" fill="#b9d4c8"/>
+    <rect x="73" y="22.5" width="9" height="3" rx="1" fill="#8fb3a4"/>
+    <rect x="53" y="55" width="16" height="21" rx="2.2" fill="#0f3a2d"/>
+    <rect x="55.5" y="57.5" width="11" height="8" rx="1.5" fill="#4f8f78"/>
+    <circle cx="66" cy="66" r="1.2" fill="#ffd24a"/>
+    <g>
+      <rect x="32" y="54" width="13" height="11" rx="2" fill="#123a2e"/>
+      <rect x="33" y="55" width="11" height="9" rx="1.4" fill="url(#s3)"/>
+      <path d="M38.5 55v9M33 59.5h11" stroke="#123a2e" stroke-width="1"/>
+    </g>
+    <g>
+      <rect x="71" y="54" width="13" height="11" rx="2" fill="#123a2e"/>
+      <rect x="72" y="55" width="11" height="9" rx="1.4" fill="url(#s3)"/>
+      <path d="M77.5 55v9M72 59.5h11" stroke="#123a2e" stroke-width="1"/>
+    </g>
+    <path d="M56 76h10l3 6H53z" fill="#d9c9a8" opacity=".55"/>
+    <g stroke="#2f9c6a" stroke-width="2" stroke-linecap="round" fill="none">
+      <path d="M15 76V58"/><path d="M15 58q-8-4-10-13q9 2 10 13"/><path d="M15 58q8-4 10-13q-9 2-10 13"/>
+      <path d="M15 58q-2-9 2-14"/>
+    </g>
+    <circle cx="15" cy="56" r="1.6" fill="#ffd24a" opacity=".9"/></svg>`;
 }
 
 /* ================= render ================= */
@@ -900,6 +1212,15 @@ function buildRoads(){
         animation-duration:${dur.toFixed(1)}s;animation-delay:${delay.toFixed(1)}s"></div>`;
     }
   }
+  // street lamps at every intersection (6 x 11) — static, no animation
+  for(let i=0;i<6;i++){
+    for(let j=0;j<11;j++){
+      const lx = i * (cell + gap) + gap/2;
+      const ly = j * (cell + gap) + gap/2;
+      const d = ((i*7 + j*13) % 5);
+      html += `<div class="lamp" style="left:${lx}px;top:${ly}px;opacity:${(0.72 + d*0.07).toFixed(2)}"></div>`;
+    }
+  }
   layer.innerHTML = html;
 }
 window.addEventListener('resize', ()=>{ clearTimeout(roadTimer); roadTimer = setTimeout(()=>{ roadSig=''; buildRoads(); }, 150); });
@@ -929,22 +1250,35 @@ function render(){
   $('hsLand').textContent = S.lands;
   $('hsHouse').textContent = S.houses.length;
   $('hsRent').textContent = fmt(incomeHour());
-  $('mapMeta').textContent = `${S.lands} من ${MAX_LANDS} قطعة`;
+  const busyN = CITY.filter(p=>p && p.owner).length;
+  $('mapMeta').textContent = `${busyN} من ${MAX_LANDS} قطعة`;
+  $('hsLand').textContent = S.lands;
+  $('hsHouse').textContent = S.houses.length;
 
-  // map
+  // map — المدينة المشتركة: كل قطعة تعرض مالكها الحقيقي
   let cells = '';
   for(let i=0;i<MAX_LANDS;i++){
-    if(i >= S.lands){
+    const p = CITY[i];
+    if(!p || !p.owner){
       cells += `<button class="plot free" onclick="plotSheet(${i})" aria-label="قطعة للبيع">${I.lock}<span class="pricebadge">500</span></button>`;
-    } else {
-      const h = S.houses[i];
-      if(!h){
-        cells += `<button class="plot empty" onclick="plotSheet(${i})" aria-label="أرض فارغة">${I.plus}</button>`;
+      continue;
+    }
+    const lvl = p.lvl || 1;
+    if(p.owner === cloud.uid){
+      if(!p.type){
+        cells += `<button class="plot empty" onclick="plotSheet(${i})" aria-label="أرض فارغة">${I.plus}<span class="pricebadge">${i+1}</span></button>`;
       } else {
-        const rdy = rentAmount(h) >= 1;
-        cells += `<button class="plot built" onclick="plotSheet(${i})" aria-label="${HOUSES[h.type].name}">
-          ${houseArt(h.type)}${rdy?'<span class="rdy"></span>':''}${h.lvl>1?`<span class="lvlbadge">${h.lvl}</span>`:''}</button>`;
+        const rdy = rentAmount({type:p.type, lvl, collectedAt:p.collectedAt||Date.now()}) >= 1;
+        cells += `<button class="plot built" onclick="plotSheet(${i})" aria-label="${HOUSES[p.type] ? HOUSES[p.type].name : ''}">
+          ${houseArt(p.type)}${rdy?'<span class="rdy"></span>':''}${lvl>1?`<span class="lvlbadge">${lvl}</span>`:''}</button>`;
       }
+    } else {
+      const who = String(p.name || p.ownerName || 'لاعب');
+      const nm = who.length > 8 ? who.slice(0,8) + '…' : who;
+      const h = ownerHue(p.owner);
+      cells += `<button class="plot other" onclick="plotSheet(${i})" aria-label="ملك ${esc(who)}"
+        style="--oc-b:hsla(${h},85%,66%,.42);--oc-bg:hsla(${h},85%,55%,.15)">
+        ${(p.type && HOUSES[p.type]) ? houseArt(p.type) : `<span class="olock">${I.lock}</span>`}<span class="own">${esc(nm)}</span></button>`;
     }
   }
   $('mapGrid').innerHTML = cells;
@@ -956,7 +1290,7 @@ function render(){
   ca.disabled = readySum < 1;
   ca.textContent = readySum > 0 ? `جمع كل الإيجارات · ${fmt(readySum)}` : 'لا إيجار جاهز';
   const bl = $('buyLandBtn');
-  bl.disabled = S.lands >= MAX_LANDS;
+  bl.disabled = !CITY.some(p=> !p || !p.owner) || S.coins < LAND_PRICE;
 
   // summary
   const hour = incomeHour();
@@ -997,7 +1331,7 @@ function render(){
       const up = upgradeCost(h);
       return `<div class="row">
         <div class="ic">${I.house}</div>
-        <div class="tx"><b>${HOUSES[h.type].name} · قطعة ${idx+1}</b><span>قيمة السوق ${fmt(Math.round(base))} · عمولة 10%</span></div>
+        <div class="tx"><b>${HOUSES[h.type].name} · قطعة ${(h.plot ?? idx)+1}</b><span>قيمة السوق ${fmt(Math.round(base))} · عمولة 10%</span></div>
         <button class="btn btn-ghost sm" onclick="upgrade(${h.id})" ${h.lvl>=3?'disabled':''}>تطوير ${h.lvl>=3?'—':fmt(up)}</button>
         <button class="btn btn-gold sm" onclick="sell(${h.id})">بيع ${fmt(price)}</button>
       </div>`;
@@ -1082,15 +1416,326 @@ window.__back = function(){
   return false;
 };
 
+/* ================= cloud city ================= */
+let CITY = new Array(MAX_LANDS).fill(null);      // plots/p0..p49 as objects or null(free)
+let cityTimer = null, cityBusy = false;
+let offlineMode = false;
+const LOCAL_CITY = 'faksab_city_local';
+const LOCAL_UID = 'local';
+function loadLocalCity(){
+  try{
+    const a = JSON.parse(localStorage.getItem(LOCAL_CITY) || 'null');
+    if(Array.isArray(a) && a.length === MAX_LANDS) return a;
+  }catch(e){}
+  return new Array(MAX_LANDS).fill(null);
+}
+function saveLocalCity(){ try{ localStorage.setItem(LOCAL_CITY, JSON.stringify(CITY)); }catch(e){} }
+function playOffline(){
+  offlineMode = true;
+  cloud.uid = LOCAL_UID; cloud.name = S.name || 'لاعب محلي'; cloud.email = '';
+  CITY = loadLocalCity();
+  rebuildMyHouses();
+  try{ localStorage.setItem('faksab_offline','1'); }catch(e){}
+  hideAuth(); render();
+  toast('مدينة محلية على جهازك — سجّل الدخول لاحقاً لتدخل المدينة المشتركة', '');
+}
+
+const myPlotIdx = () => CITY.reduce((a,p,i)=> (p && p.owner===cloud.uid ? (a.push(i),a) : a), []);
+function rebuildMyHouses(){
+  S.houses = myPlotIdx()
+    .map(i=>({...CITY[i], id:i, plot:i}))
+    .filter(h=>h.type);
+  S.lands = myPlotIdx().length;
+}
+const plotOwnedBy = i => CITY[i] && CITY[i].owner;
+const myEmptyPlot = () => myPlotIdx().find(i => CITY[i] && !CITY[i].type);
+
+async function pullCity(){
+  if(offlineMode) return false;
+  if(!cloud.token && !cloud.rt) return false;
+  if(cityBusy) return false;
+  cityBusy = true;
+  try{
+    const j = await fsGet('plots', ['owner','name','type','lvl','collectedAt','built','ownerName'],
+      ['pageSize=300']);
+    const docs = (j && j.documents) || [];
+    const next = new Array(MAX_LANDS).fill(null);
+    docs.forEach(d=>{
+      const m = /plots\/p(\d+)$/.exec(d.name); if(!m) return;
+      const i = +m[1]; if(i<0 || i>=MAX_LANDS) return;
+      const p = docToObj(d);
+      if(!p.owner) return;
+      next[i] = p;
+    });
+    CITY = next;
+    rebuildMyHouses();
+    cloud.online = true;
+    paintLive();
+    render();
+    save();
+    return true;
+  }catch(e){
+    cloud.online = false; paintLive();
+    if(e.status === 401) await reauthQuiet();
+    return false;
+  }finally{ cityBusy = false; }
+}
+function paintLive(){
+  const d = $('liveDot'); if(!d) return;
+  d.classList.toggle('off', !cloud.online);
+}
+
+async function reauthQuiet(){
+  try{ await ensureToken(); }catch(e){ authForget(); showAuth(); }
+}
+
+/* --- user doc --- */
+let pushT = null;
+function schedulePush(){
+  clearTimeout(pushT);
+  pushT = setTimeout(()=>{ pushUser().catch(()=>{}); }, 1400);
+}
+function userPayload(){
+  return {
+    coins: Math.max(0, Math.round(S.coins)), xp: S.xp, level: S.level,
+    earned: S.earned, sold: S.sold, rents: S.rents, built: S.built,
+    streak: S.streak, lastDaily: S.lastDaily, tasks: S.tasks,
+    tasksClaimed: S.tasksClaimed, taskDay: S.taskDay, ach: S.ach,
+    sound: S.sound, haptics: S.haptics, tourDone: S.tourDone,
+    name: cloud.name, lastSeen: Date.now(), v: 2
+  };
+}
+async function pushUser(){
+  if(!cloud.uid || offlineMode || cloud.uid === LOCAL_UID) return;
+  const payload = userPayload();
+  try{
+    await fsPatch('users/'+cloud.uid, payload);
+  }catch(e){
+    if(e.status !== 404) throw e;
+    await ensureToken();
+    await fsCommit([{
+      update:{ name: DOC('users/'+cloud.uid), fields: objToFields(payload) },
+      currentDocument:{ exists:false }
+    }]);
+  }
+}
+async function loadUser(){
+  let doc = null;
+  try{ doc = await fsGet('users/'+cloud.uid); }
+  catch(e){ if(e.status !== 404) throw e; }
+  if(!doc || !doc.fields){
+    // أول دخول: نرفع التقدم المحلي إن وُجد
+    S.name = cloud.name;
+    await pushUser();
+    return;
+  }
+  const u = docToObj(doc);
+  const kept = S;
+  S = Object.assign({}, DEF, u);
+  S.tasks = Object.assign({build:0,sell:0,rent:0}, u.tasks||{});
+  S.ach = u.ach || {};
+  S.name = u.name || cloud.name;
+  cloud.name = S.name;
+  if(u.tourDone === undefined) S.tourDone = kept.tourDone;
+  localStorage.setItem('faksab_v1', JSON.stringify(S));
+}
+
+/* --- plots --- */
+async function writePlot(i, fields){
+  if(offlineMode){
+    CITY[i] = Object.assign({}, CITY[i] || {owner:LOCAL_UID, ownerName:cloud.name}, fields);
+    saveLocalCity(); rebuildMyHouses();
+    return;
+  }
+  await ensureToken();
+  await fsPatch('plots/p'+i, fields);
+  CITY[i] = Object.assign({}, CITY[i] || {owner:cloud.uid, ownerName:cloud.name}, fields);
+  rebuildMyHouses();
+}
+async function claimPlot(pref){
+  if(S.coins < LAND_PRICE){ SFX.err(); return toast('عملاتك لا تكفي — تحتاج 500 عملة', 'bad'); }
+  if(S.lands >= MAX_LANDS){ SFX.err(); return toast('كل الأراضي مُباعة حالياً', 'bad'); }
+  if(!cloud.uid){ SFX.err(); return toast('سجّل الدخول أولاً', 'bad'); }
+  if(offlineMode){
+    let i = -1;
+    if(pref !== undefined && pref !== null && !CITY[pref]) i = pref;
+    else i = CITY.findIndex(p=>!p || !p.owner);
+    if(i < 0) { SFX.err(); return toast('كل الأراضي مُباعة حالياً', 'bad'); }
+    S.coins -= LAND_PRICE;
+    CITY[i] = {owner:LOCAL_UID, ownerName:cloud.name, name:cloud.name, type:'', lvl:0, built:0, collectedAt:0};
+    saveLocalCity(); rebuildMyHouses();
+    addXP(25); SFX.buy(); vibrate(15);
+    save(); render();
+    toast(`تم شراء قطعة رقم ${i+1} · +25 خبرة`, 'ok');
+    return i;
+  }
+  let tok;
+  try{ tok = await ensureToken(); }
+  catch(e){ SFX.err(); return toast('تحتاج اتصالاً بالإنترنت لشراء أرض', 'bad'); }
+  const order = [];
+  if(pref !== undefined && pref !== null && !CITY[pref]) order.push(pref);
+  for(let i=0;i<MAX_LANDS;i++) if(!CITY[i] && i !== pref) order.push(i);
+  if(!order.length){ SFX.err(); return toast('كل الأراضي مُباعة حالياً', 'bad'); }
+  // خصم محلي مسبق، ونعيده إن فشل الحجز
+  S.coins -= LAND_PRICE;
+  render();
+  for(const i of order){
+    try{
+      await fsCommit([{
+        update:{
+          name: DOC('plots/p'+i),
+          fields: objToFields({owner:cloud.uid, ownerName:cloud.name, name:cloud.name,
+            type:'', lvl:0, built:0, collectedAt:0})
+        },
+        currentDocument:{ exists:false }
+      }]);
+      CITY[i] = {owner:cloud.uid, ownerName:cloud.name, name:cloud.name, type:'', lvl:0, built:0, collectedAt:0};
+      rebuildMyHouses();
+      addXP(25); S.built = S.built; SFX.buy(); vibrate(15);
+      save(); render();
+      toast(`تم شراء قطعة رقم ${i+1} · +25 خبرة`, 'ok');
+      return i;
+    }catch(e){
+      if(e.status === 409 || e.status === 400 || (e.body && String(e.message).indexOf('FAILED_PRECONDITION')>=0)) continue;
+      S.coins += LAND_PRICE; render();
+      toast('تعذّر شراء الأرض — تأكد من الاتصال', 'bad');
+      return null;
+    }
+  }
+  S.coins += LAND_PRICE; render();
+  await pullCity();
+  toast('قطعة الأرض التي سبقتك أُخذت — جرّب قطعة أخرى', 'bad');
+  return null;
+}
+
+/* --- auth UI --- */
+let authTab = 'login';
+function showAuth(){ $('auth').style.display='flex'; }
+function hideAuth(){ $('auth').style.display='none'; }
+function authMode(m){
+  authTab = m;
+  $('tabLogin').classList.toggle('on', m==='login');
+  $('tabReg').classList.toggle('on', m==='reg');
+  $('authNameWrap').style.display = m==='reg' ? 'block' : 'none';
+  $('authBtn').textContent = m==='reg' ? 'إنشاء الحساب والبدء' : 'دخول إلى المدينة';
+  $('auPass').autocomplete = m==='reg' ? 'new-password' : 'current-password';
+  $('authErr').textContent = '';
+}
+function authErrText(e){
+  const msg = String((e && (e.message||'')) || '');
+  const map = {
+    EMAIL_EXISTS:'هذا البريد مسجّل بالفعل — اضغط «تسجيل الدخول»',
+    EMAIL_NOT_FOUND:'لا يوجد حساب بهذا البريد — أنشئ حساباً جديداً',
+    INVALID_PASSWORD:'كلمة المرور غير صحيحة',
+    INVALID_LOGIN_CREDENTIALS:'البريد أو كلمة المرور غير صحيحة',
+    INVALID_EMAIL:'صيغة البريد غير صحيحة',
+    MISSING_PASSWORD:'أدخل كلمة المرور',
+    WEAK_PASSWORD:'كلمة المرور قصيرة — 6 أحرف على الأقل',
+    PASSWORD_LOGIN_DISABLED:'تسجيل الدخول بالبريد غير مفعّل بعد — فعّل Email/Password في لوحة Firebase',
+    OPERATION_NOT_ALLOWED:'تسجيل الدخول بالبريد غير مفعّل بعد — فعّل Email/Password في لوحة Firebase',
+    CONFIGURATION_NOT_FOUND:'خدمة الدخول غير مهيّأة في مشروع Firebase — فعّل Email/Password في Authentication',
+    PERMISSION_DENIED:'قاعدة البيانات غير مهيّأة بعد — أنشئ Firestore وألصق القواعد',
+    NOT_FOUND:'قاعدة البيانات غير مهيّأة بعد — أنشئ Firestore في لوحة Firebase',
+    FAILED_PRECONDITION:'قاعدة البيانات غير مهيّأة بعد — أنشئ Firestore في لوحة Firebase',
+    TOO_MANY_ATTEMPTS_TRY_LATER:'محاولات كثيرة — انتظر قليلاً ثم حاول',
+    'HTTP 403':'لا توجد صلاحية — راجع قواعد Firestore',
+    NO_SESSION:'انتهت الجلسة — سجّل الدخول من جديد'
+  };
+  for(const k in map) if(msg.indexOf(k)>=0) return map[k];
+  if(!navigator.onLine) return 'لا يوجد اتصال بالإنترنت';
+  return 'تعذّر الاتصال — حاول مرة أخرى';
+}
+async function doAuth(){
+  const email = $('auEmail').value.trim();
+  const pass  = $('auPass').value;
+  const name  = $('auName').value.trim();
+  const errEl = $('authErr'), btn = $('authBtn');
+  errEl.textContent = '';
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)){ errEl.textContent='صيغة البريد غير صحيحة'; return; }
+  if(pass.length < 6){ errEl.textContent='كلمة المرور 6 أحرف على الأقل'; return; }
+  if(authTab==='reg' && name.length < 2){ errEl.textContent='اكتب اسمك في المدينة (حرفان على الأقل)'; return; }
+  btn.disabled = true; btn.innerHTML = '<span class="auth-spin"></span>';
+  try{
+    const j = authTab==='reg' ? await authSignUp(email,pass) : await authSignIn(email,pass);
+    cloud.uid = j.localId; cloud.token = j.idToken; cloud.rt = j.refreshToken;
+    cloud.email = email; cloud.exp = Date.now() + (+j.expiresIn||3600)*1000;
+    cloud.name = name || (cloud.name || email.split('@')[0]);
+    authPersist();
+    await loadUser();
+    const ok = await pullCity();
+    if(!ok) throw new Error('PERMISSION_DENIED');
+    hideAuth(); startCloud(); render();
+    toast(`أهلاً ${cloud.name} — المدينة مشتركة مع كل اللاعبين`, 'ok');
+  }catch(e){
+    errEl.textContent = authErrText(e);
+    if(String(e.message)==='PERMISSION_DENIED' && cloud.uid) authForget();
+  }finally{
+    btn.disabled = false;
+    authMode(authTab);
+    $('authErr').textContent = errEl.textContent;
+  }
+}
+async function logout(){
+  authForget(); stopCloud();
+  offlineMode = false;
+  try{ localStorage.removeItem('faksab_offline'); }catch(e){}
+  try{ localStorage.removeItem(AUTH_STORE); }catch(e){}
+  CITY = new Array(MAX_LANDS).fill(null);
+  S = Object.assign({}, DEF); S.tourDone = true;
+  $('auPass').value = ''; authMode('login'); showAuth();
+  render();
+}
+
 /* ================= boot ================= */
 document.querySelectorAll('.ic[data-ico]').forEach(el=>{ el.innerHTML = I[el.dataset.ico] || ''; });
 render();
 if(!S.tourDone) setTimeout(showTour, 450);
 offlineReport();
-S.lastSeen = Date.now(); save();
-setInterval(()=>{ render(); }, 15000);          // refresh accruing rent
-document.addEventListener('visibilitychange', ()=>{ if(!document.hidden){ render(); } });
+
+function startCloud(){
+  stopCloud();
+  S.lastSeen = Date.now(); save();
+  cityTimer = setInterval(()=>{
+    if(document.hidden) return;
+    const a = document.querySelector('.view.active');
+    if(a && a.id === 'v-city') pullCity();
+  }, 20000);
+}
+function stopCloud(){ if(cityTimer){ clearInterval(cityTimer); cityTimer = null; } }
+
+document.addEventListener('visibilitychange', ()=>{
+  if(!document.hidden){
+    render();
+    if(cloud.uid){
+      const a = document.querySelector('.view.active');
+      if(a && a.id === 'v-city') pullCity();
+    }
+  }
+});
 window.addEventListener('beforeunload', ()=>{ S.lastSeen = Date.now(); save(); });
+
+/* جلسة محفوظة؟ ندخل مباشرة، وإلا نعرض بوابة الدخول */
+(async ()=>{
+  if(localStorage.getItem('faksab_offline') === '1'){
+    offlineMode = true; cloud.uid = LOCAL_UID; cloud.name = S.name || 'لاعب محلي';
+    CITY = loadLocalCity(); rebuildMyHouses(); hideAuth(); render(); return;
+  }
+  const raw = localStorage.getItem(AUTH_STORE);
+  if(!raw){ authMode('login'); showAuth(); return; }
+  try{
+    const a = JSON.parse(raw);
+    cloud.uid = a.uid; cloud.email = a.email; cloud.rt = a.rt; cloud.name = a.name || '';
+    await ensureToken();
+    await loadUser();
+    const ok = await pullCity();
+    if(!ok) throw new Error('PERMISSION_DENIED');
+    hideAuth(); startCloud(); render();
+  }catch(e){
+    cloud.token = ''; cloud.rt = '';
+    authMode('login'); showAuth();
+    if(localStorage.getItem(AUTH_STORE)) $('authErr').textContent = authErrText(e);
+  }
+})();
 
 if('serviceWorker' in navigator && location.protocol.startsWith('http')){
   navigator.serviceWorker.register('sw.js').catch(()=>{});

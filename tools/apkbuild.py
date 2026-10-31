@@ -146,7 +146,7 @@ def build_manifest():
         ('android', 'launchMode', 2),                 # singleTask
         ('android', 'windowSoftInputMode', 0x10),     # adjustResize
     ]
-    tree = ('manifest', None, [('versionCode', 1), ('versionName', '2.0.0')], None)
+    tree = ('manifest', None, [('versionCode', 2), ('versionName', '2.1.0')], None)
     # element(ns, name, attrs, children) with unqualified `package`
     order = ['versionCode', 'versionName', 'minSdkVersion', 'targetSdkVersion', 'label',
              'icon', 'roundIcon', 'name', 'exported', 'allowBackup', 'supportsRtl',
@@ -154,7 +154,10 @@ def build_manifest():
              'screenOrientation', 'configChanges', 'launchMode', 'windowSoftInputMode']
     b = AXML(order)
     b.start(None, 'manifest', [(None, 'package', 'com.faksab.smartcity')] +
-            [(ANDROID_NS, 'versionCode', 1), (ANDROID_NS, 'versionName', '2.0.0')])
+            [(ANDROID_NS, 'versionCode', 2), (ANDROID_NS, 'versionName', '2.1.0')])
+    b.start(None, 'uses-permission',
+            [(ANDROID_NS, 'name', 'android.permission.INTERNET')])
+    b.end(None, 'uses-permission')
     b.start(None, 'uses-sdk', [(ANDROID_NS, 'minSdkVersion', 24),
                                      (ANDROID_NS, 'targetSdkVersion', 34)])
     b.end(None, 'uses-sdk')
