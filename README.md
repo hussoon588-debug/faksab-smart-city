@@ -1,95 +1,35 @@
-# فكسب سمارت سيتي — FAKSAB SMART CITY
+# فكسب · FAKSAB SMART CITY 8.2
 
-لعبة بناء مدينة عقارية بالعربية، تعمل بلا إنترنت وبلا حساب. كل شيء محفوظ على جهاز اللاعب.
+Arabic RTL real-estate city game. The web build is published on GitHub Pages:
 
----
+- Game: https://hussoon588-debug.github.io/faksab-smart-city/
+- Hub: https://hussoon588-debug.github.io/projects/
 
-## 1. التثبيت على أندرويد
+## What is in this release
 
-الملف: `faksab-smart-city.apk` — موقَّع وجاهز للتثبيت.
+- Single-file city game (`index.html`) — map, building, levels, economy (local save).
+- Shared world layer (`src/supabase-world.js`) — Supabase Auth + PostgreSQL `plots`
+  table + Realtime, five cities × 50 plots, atomic `purchase_plot` RPC.
+- `supabase/schema.sql` — tables, RLS, trigger, seed data and the purchase function.
 
-1. انقل الملف إلى الهاتف (تلغرام، كيبل، Drive — أي طريقة).
-2. افتحه من مدير الملفات أو من إشعار التنزيل.
-3. سيسألك أندرويد: «التثبيت من مصادر غير معروفة» — اسمح للمرة الواحدة فقط.
-4. اضغط «تثبيت»، ثم «فتح».
+## Backend setup (one time, owner's dashboard)
 
-التحذير طبيعي: أي تطبيق لا يأتي من Google Play يظهر بهذه الصيغة. التطبيق موقَّع بمفتاح خاص (انظر القسم 5)، لا يطلب أي صلاحية، ولا يتصل بأي سيرفر — لا إنترنت، لا موقع، لا جهات اتصال، لا إعلانات.
+1. Supabase Dashboard → SQL Editor → New query → paste `supabase/schema.sql` → Run.
+2. Authentication → Providers → Email → keep enabled. For instant sign-up, turn
+   **Confirm email** off; otherwise new players must click a link before logging in.
 
-**ملاحظة صادقة:** البناء تم والتحقق من التوقيع نجح، لكن **لم يُجرَّب التثبيت على جهاز أندرويد حقيقي** — لا يوجد جهاز في بيئة البناء. إن ظهرت أي مشكلة عند التثبيت أرسل لي نص الرسالة وأعالجها فوراً.
+The browser holds only the project URL and the publishable (anon) key — those are
+meant for the client. Never put the database password or `service_role` key in this
+repository or in any front-end file.
 
----
+## Known seam
 
-## 2. ما داخل اللعبة
+The shared world (Supabase panel) and the local city game currently run side by side:
+a plot bought in the Supabase panel does not appear on the local map, and the local
+`buyLand()` does not write to the database. Wiring the two is the next development
+step.
 
-ستة أنظمة متكاملة:
+## Local run
 
-**المدينة** — 50 قطعة أرض، كل قطعة بـ 500 عملة. خريطة مدينة: 50 قطعة بينها شوارع بخطوط مرورية وسيارات متحركة؛ كل القطع مقفلة بسعر 500 حتى تُشترى، واضغط القطعة لفتحها.
-
-**البناء** — ثلاثة مستويات: بيت صغير (1,000 عملة، إيجار 14)، بيت متوسط (2,000، إيجار 32)، بيت فاخر (5,000، إيجار 75). كل بيت يُرقّى حتى المستوى 3، والإيجار يتراكم بمرور الوقت حتى تجمعه.
-
-**السوق** — بيع أي عقار بسعر السوق ناقص 10% رسم بيع. البيع يحرّر الأرض للبناء من جديد.
-
-**المستويات** — 10 مستويات بقانون واضح: 100 · 250 · 500 · 900 · 1,500 · 2,500 · 4,000 · 6,000 · 9,000 خبرة، ومكافأة عند كل ترقية من 100 حتى 1,500.
-
-**المهام اليومية** — ثلاث مهام تتجدد يومياً مع سلسلة أيام متتالية (streak) تضاعف المكافأة.
-
-**الإنجازات** — 12 إنجازاً بين البناء والبيع والترقية والإيجار، بمكافآت دائمة.
-
-إضافات: أصوات ومؤثرات تفاعلية، اهتزاز على الأجهزة الداعمة، شاشة تعليم أول مرة، وإمكانية إيقاف الصوت والاهتزاز من الإعدادات.
-
----
-
-## 3. هيكل الملفات
-
-```
-index.html          اللعبة كاملة في ملف واحد (تعمل بنقرة مزدوجة على أي متصفح)
-manifest.json       ملف تعريف PWA
-sw.js               Service Worker — تشغيل بلا إنترنت
-icon-192.png        أيقونة الويب
-icon-512.png        أيقونة الويب الكبيرة
-src/index.src.html  المصدر القابل للتعديل (نفس محتوى index.html)
-android/            كود أندرويد (WebView) + أيقونة المشغّل
-tools/apkbuild.py   سكربت بناء الـ APK من الصفر
-signing/            مفتاح التوقيع وكلمة مروره — اقرأ القسم 5
-README.md           هذا الملف
-```
-
----
-
-## 4. طريقة بديلة: تثبيت من المتصفح (PWA)
-
-ارفع مجلد الملفات على أي استضافة HTTPS مجانية، افتح الرابط من كروم على الهاتف، ثم: قائمة ⋮ ← «تثبيت التطبيق». يعمل بنفس الشكل وبنفس الحفظ المحلي، دون أي تحذير تثبيت.
-
----
-
-## 5. مفتاح التوقيع — الأهم في هذا المشروع
-
-`signing/faksab.keystore` وكلمة المرور في `signing/keystore.pass`.
-
-- **بدونه لا يمكن إصدار تحديث** لنسخة مثبَّتة مسبقاً. أندرويد يرفض أي تحديث موقَّع بمفتاح مختلف، والحل الوحيد سيكون حذف التطبيق وفقدان كل تقدم اللاعبين.
-- **لا تشاركه مع أحد.** من يملكه يستطيع إصدار تحديثات موقَّعة بهوية تطبيقك.
-- احفظ نسخة احتياطية منه في مكانين منفصلين (لا على الهاتف وحده).
-
-لتحديث اللعبة: عدّل `src/index.src.html`، أعِد بناء `index.html`، ثم:
-
-```
-python3 tools/apkbuild.py
-```
-
-سيُنتج APK جديداً بنفس المفتاح، ويقبل التحديث فوق النسخة المثبَّتة.
-
-البناء يحتاج JDK 17 و`android.jar` و`d8` و`apksigner` (كلها تأتي مع Android SDK build-tools). لا يحتاج Gradle ولا Android Studio.
-
----
-
-## 6. النشر على Google Play
-
-هذا الـ APK مخصص للتثبيت المباشر والتوزيع خارج المتجر. المتجر يطلب ملف AAB لا APK.
-
-المسار العملي: افتح المشروع في Android Studio وأضف `WebView` يحمّل `index.html` من `assets` — نفس كود `android/` موجود وهو صغير، فيكفي لفّه في مشروع Gradle. التفاصيل الكاملة في قسم النشر على Play Console: حساب مطوّر (رسوم لمرة واحدة)، صفحة المتجر، سياسة الخصوصية (اللعبة لا تجمع بيانات — نص قصير يكفي)، ثم رفع AAB موقَّع بمفتاح جديد تحفظه جيداً.
-
----
-
-## 7. الخصوصية
-
-اللعبة لا تجمع أي بيانات ولا ترسل أي شيء إلى أي خادم. التقدم محفوظ في `localStorage` داخل المتصفح أو WebView على جهاز اللاعب فقط. حذف التطبيق يحذف التقدم — لا يوجد حساب ولا مزامنة سحابية.
+Any static server over the folder, e.g. `python3 -m http.server 8000`, then open
+`http://localhost:8000/`. Service worker requires `http://` or `https://`.

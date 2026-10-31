@@ -1,7 +1,7 @@
 {
-  "name": "فكسب سمارت سيتي",
-  "short_name": "فكسب",
-  "description": "لعبة بناء وإدارة مدينة عقارية — ابنِ، استثمر، ارتقِ",
+  "name": "فكسب سمارت سيتي 8.2",
+  "short_name": "فكسب 8.2",
+  "description": "محاكاة مدينة واستثمار عقاري تنافسية",
   "lang": "ar",
   "dir": "rtl",
   "start_url": "./index.html",
@@ -10,10 +10,29 @@
   "orientation": "portrait",
   "background_color": "#050d1f",
   "theme_color": "#050d1f",
-  "categories": ["games", "simulation"],
+  "categories": [
+    "games",
+    "simulation"
+  ],
   "icons": [
-    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
-  ]
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "version": "8.2.0"
 }
