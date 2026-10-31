@@ -4,8 +4,9 @@
   "description": "محاكاة مدينة واستثمار عقاري تنافسية",
   "lang": "ar",
   "dir": "rtl",
-  "start_url": "./index.html",
-  "scope": "./",
+  "id": "/faksab-smart-city/",
+  "start_url": "/faksab-smart-city/",
+  "scope": "/faksab-smart-city/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#050d1f",
@@ -16,19 +17,19 @@
   ],
   "icons": [
     {
-      "src": "icon-192.png",
+      "src": "/faksab-smart-city/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "icon-512.png",
+      "src": "/faksab-smart-city/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "icon-512.png",
+      "src": "/faksab-smart-city/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
