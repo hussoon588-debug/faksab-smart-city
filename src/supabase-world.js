@@ -25,7 +25,16 @@ async function loadPlots() {
   }
   const cityId = selectedCity();
   const { data, error } = await supabase.from('plots').select('id,city_id,plot_no,price,owner_id,owner_name').eq('city_id', cityId).order('plot_no');
-  if (error) throw error;
+  if (error) {
+    if (error.code === 'PGRST205') {
+      plotsCache = [];
+      if ($('sbPlots')) $('sbPlots').innerHTML = '';
+      if ($('sbSummary')) $('sbSummary').textContent = 'لم يتم تحميل أراضي المدينة.';
+      status('قاعدة البيانات غير مهيّأة بعد — اضغط زر «إعداد المدينة المشتركة» أعلاه، دقيقة واحدة وتعمل.');
+      return;
+    }
+    throw error;
+  }
   plotsCache = data || [];
   const owned = plotsCache.filter(p => p.owner_id).length;
   $('sbSummary').textContent = `${cityNames[cityId]} · ${plotsCache.length} قطعة · ${owned} مملوكة · ${plotsCache.length-owned} متاحة`;
@@ -69,7 +78,7 @@ $('sbLogout').addEventListener('click', async () => {
   const { error } = await supabase.auth.signOut(); if (error) return status(error.message);
   currentUser = null; await refreshSession();
 });
-$('sbRefresh').addEventListener('click', async () => { try { await loadPlots(); status('تم تحديث بيانات الأراضي.'); } catch(e) { status('تعذر التحديث: ' + e.message); } });
+$('sbRefresh').addEventListener('click', async () => { try { await loadPlots(); status(currentUser ? 'تم تحديث بيانات الأراضي.' : 'أنت غير مسجّل الدخول — أنشئ حساباً أو سجّل الدخول أولاً لعرض الأراضي.'); } catch(e) { status('تعذر التحديث: ' + e.message); } });
 $('sbCity').addEventListener('change', async () => { try { await refreshSession(); } catch(e) { status('تعذر تبديل المدينة: ' + e.message); } });
 $('sbBuy').addEventListener('click', async () => {
   if (!currentUser) return status('سجّل الدخول أولاً.');
