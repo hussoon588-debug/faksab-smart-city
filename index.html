@@ -9,6 +9,12 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="description" content="فكسب سمارت سيتي — ابنِ مدينتك، طوّر عقاراتك ونافس في دوري المستثمرين">
 <title>فكسب · SMART CITY 8.2</title>
+<script type="importmap">
+{"imports":{
+  "three":"https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js",
+  "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.1/examples/jsm/"
+}}
+</script>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -1260,6 +1266,7 @@ document.querySelectorAll('.ic[data-ico]').forEach(el=>{ el.innerHTML = I[el.dat
 /* ===== FAKSAB 7.0: interactive isometric city renderer ===== */
 (function initCity3D(){
  const canvas=document.getElementById('city3dCanvas'); if(!canvas)return;
+ if(canvas.tagName!=='CANVAS'||typeof canvas.getContext!=='function')return;
  const ctx=canvas.getContext('2d'); if(!ctx)return;
  let zoom=1,rotation=0,selected=-1,plots=[],w=0,h=0,dpr=1;
  const palette=['#4c86a8','#b57b48','#688b75','#7a75a8','#b08a55'];
@@ -1296,7 +1303,11 @@ document.addEventListener('visibilitychange', ()=>{ if(!document.hidden){ render
 window.addEventListener('beforeunload', ()=>{ S.lastSeen = Date.now(); save(); });
 
 if('serviceWorker' in navigator && location.protocol.startsWith('http')){
-  navigator.serviceWorker.register('sw.js').catch(()=>{});
+  let swReloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', ()=>{
+    if(swReloaded) return; swReloaded = true; location.reload();
+  });
+  navigator.serviceWorker.register('sw.js').then(r=>{ try{ r.update(); }catch(e){} }).catch(()=>{});
 }
 </script>
 \n<style>
