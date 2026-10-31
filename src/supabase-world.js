@@ -17,6 +17,12 @@ const selectedCity = () => $('sbCity').value;
 const safe = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 async function loadPlots() {
+  if (!currentUser) {
+    plotsCache = [];
+    if ($('sbSummary')) $('sbSummary').textContent = 'سجّل الدخول أو أنشئ حساباً لعرض أراضي المدينة المشتركة.';
+    if ($('sbPlots')) $('sbPlots').innerHTML = '';
+    return;
+  }
   const cityId = selectedCity();
   const { data, error } = await supabase.from('plots').select('id,city_id,plot_no,price,owner_id,owner_name').eq('city_id', cityId).order('plot_no');
   if (error) throw error;
