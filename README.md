@@ -13,8 +13,12 @@ Arabic RTL real-estate city game. The web build is published on GitHub Pages:
   table + Realtime, five cities × 50 plots, atomic `purchase_plot` RPC.
 - `supabase/schema.sql` — tables, RLS, trigger, seed data and the purchase function.
 - **OFUQ · أفق** (`apps/ofuq/`) — separate product: a local-first urban-investment
-  simulation with its own app shell, pure simulation core and tests. See
-  [`docs/OFUQ.md`](docs/OFUQ.md).
+  simulation with its own app shell, pure simulation core and tests. It ships a 3D city
+  view (Three.js, vendored, with a 2D fallback), an account panel, and an opt-in
+  server-authoritative backend in `supabase/ofuq/schema.sql` that is off until
+  `APP.backend.mode` is set to `supabase`. See [`docs/OFUQ.md`](docs/OFUQ.md),
+  [`docs/OFUQ_GAP_ANALYSIS.md`](docs/OFUQ_GAP_ANALYSIS.md) and
+  [`docs/OFUQ_BUILD_PROMPT.md`](docs/OFUQ_BUILD_PROMPT.md).
 
 ## Backend setup (one time, owner's dashboard)
 
