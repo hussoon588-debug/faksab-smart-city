@@ -25,7 +25,7 @@ const flush = async (rounds = 6) => {
   }
 };
 
-async function boot({ remote = false } = {}) {
+async function boot({ remote = false, onFetch = null } = {}) {
   const html = await readFile(path.join(ROOT, 'apps/ofuq/index.html'), 'utf8');
   const dom = new JSDOM(html, { url: 'http://localhost:8000/apps/ofuq/', pretendToBeVisual: true });
   dom.window.scrollTo = () => {};
@@ -41,7 +41,12 @@ async function boot({ remote = false } = {}) {
     ? createSupabaseBackend({
         url: 'https://demo.supabase.co',
         publishableKey: 'sb_publishable_test',
-        fetchImpl: fake.fetchImpl,
+        fetchImpl: onFetch
+          ? (url, init) => {
+              onFetch(String(url));
+              return fake.fetchImpl(url, init);
+            }
+          : fake.fetchImpl,
         storage: createMemoryStorage()
       })
     : null;
@@ -227,4 +232,28 @@ test('a stored session is restored on boot without asking again', { skip: !JSDOM
   assert.equal(store.state.plots['harbor:4']?.districtId, 'harbor', 'the server city arrived with the session');
   assert.equal(store.state.cash, 11600);
   assert.equal($('accountSession').hidden, false);
+});
+
+test('a double tap cannot create two sign-ins', { skip: !JSDOM && 'jsdom not installed' }, async (t) => {
+  const calls = [];
+  const { dom, store, ui, $ } = await boot({ remote: true, onFetch: (url) => calls.push(url) });
+  t.after(() => {
+    ui.destroy();
+    dom.window.close();
+  });
+
+  await store.auth.signUp('nawaf@example.com', 'secret123', 'نواف');
+  await store.auth.signOut();
+  calls.length = 0;
+
+  $('authEmail').value = 'nawaf@example.com';
+  $('authPassword').value = 'secret123';
+  $('authSignIn').click();
+  $('authSignIn').click();
+  $('authSignIn').click();
+  await flush();
+
+  const tokenCalls = calls.filter((url) => url.includes('/auth/v1/token'));
+  assert.equal(tokenCalls.length, 1, 'exactly one sign-in request leaves the device');
+  assert.equal(store.auth.signedIn, true);
 });

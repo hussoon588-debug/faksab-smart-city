@@ -66,6 +66,7 @@ export function mount(store) {
   };
   let toastTimer = 0;
   let searchTimer = 0;
+  let authBusy = false;
   let resetArmed = false;
 
   /* --------------------------------------------------------------- helpers */
@@ -553,8 +554,14 @@ export function mount(store) {
     session.hidden = true;
   }
 
-  /** Runs an auth call with a visible busy state and a single honest toast. */
+  /**
+   * Runs an auth call with a visible busy state and a single honest toast.
+   * A second tap while a request is in flight is ignored — double-submitting a sign-up
+   * would create two sessions and two ledger rows for the same intent.
+   */
   async function runAuth(button, task, busyLabel) {
+    if (authBusy) return { ok: false, message: 'جارٍ التنفيذ — لحظة.' };
+    authBusy = true;
     if (button) {
       button.setAttribute('aria-busy', 'true');
       button.dataset.label = button.textContent;
@@ -568,6 +575,7 @@ export function mount(store) {
       console.warn('[ofuq] auth', error);
       return act({ ok: false, message: 'تعذر الاتصال بالخادم — حاول مرة أخرى.' });
     } finally {
+      authBusy = false;
       if (button) {
         button.removeAttribute('aria-busy');
         if (button.dataset.label) button.textContent = button.dataset.label;
