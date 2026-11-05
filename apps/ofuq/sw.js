@@ -3,7 +3,7 @@
  * Scope-relative: the same file is valid locally (`/apps/ofuq/`) and on GitHub
  * Pages (`/faksab-smart-city/apps/ofuq/`). Bump APP_VERSION with the manifest.
  */
-const APP_VERSION = '0.6.0';
+const APP_VERSION = '0.7.0';
 const CACHE_NAME = `ofuq-v${APP_VERSION}`;
 
 const ASSETS = [

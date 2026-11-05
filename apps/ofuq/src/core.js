@@ -278,6 +278,8 @@ export const LEDGER_REASONS = {
   sale: { label: 'بيع أصل', kind: 'in' },
   mission_reward: { label: 'مكافأة تحدي', kind: 'in' },
   market_fee: { label: 'عمولة سوق', kind: 'out' },
+  lease_payment: { label: 'دفع إيجار مستأجر', kind: 'out' },
+  lease_income: { label: 'إيراد تأجير', kind: 'in' },
   admin_adjustment: { label: 'تعديل إداري', kind: 'in' }
 };
 
@@ -396,7 +398,7 @@ export function validateOfferPrice(rawPrice, plot, district) {
 
 /** Board summary for the market header. */
 export function marketSummary(offers = [], now = Date.now()) {
-  const live = offers.filter((offer) => isOfferLive(offer, now));
+  const live = offers.filter((offer) => isOfferLive(offer, now) && !isLeaseListing(offer));
   return {
     open: live.length,
     mine: live.filter((offer) => offer.mine).length,
@@ -569,4 +571,97 @@ export function achievementBoard(state) {
       progress: achievement.target > 0 ? shown / achievement.target : 1
     };
   });
+}
+
+/* ---------------------------------------------------------------- leases --- */
+/**
+ * A lease rents out the *income* of a developed plot for a fixed window. Ownership never
+ * moves: the tenant pays the fee up front and collects the rent until the clock runs out,
+ * then the plot goes back to earning for its owner. The fee is the owner's, minus the same
+ * 4% the market takes on a sale.
+ */
+
+export const leaseGross = (rent, hours) =>
+  Math.round(Math.max(0, Number(rent) || 0) * Math.max(0, Number(hours) || 0));
+
+export function suggestedLeaseFee(rent, hours) {
+  const gross = leaseGross(rent, hours);
+  const { minFee, maxFee, suggestedRate } = ECONOMY.lease;
+  return Math.min(maxFee, Math.max(minFee, Math.round((gross * suggestedRate) / 10) * 10));
+}
+
+export function validateLeaseFee(raw) {
+  const fee = Math.round(Number(raw));
+  const { minFee, maxFee } = ECONOMY.lease;
+  if (!Number.isFinite(fee)) return { ok: false, error: 'أدخل مبلغاً صحيحاً.' };
+  if (fee < minFee) return { ok: false, error: `أقل مبلغ مسموح ${minFee} عملة.` };
+  if (fee > maxFee) return { ok: false, error: 'المبلغ أعلى من الحد المسموح.' };
+  return { ok: true, fee, net: offerProceeds(fee), platformFee: marketFee(fee) };
+}
+
+export function validateLeaseHours(raw) {
+  const hours = Math.round(Number(raw));
+  const { minHours, maxHours } = ECONOMY.lease;
+  if (!Number.isFinite(hours)) return { ok: false, error: 'أدخل عدد ساعات صحيحاً.' };
+  if (hours < minHours) return { ok: false, error: `أقل مدة ${minHours} ساعة.` };
+  if (hours > maxHours) return { ok: false, error: `أطول مدة ${maxHours} ساعة.` };
+  return { ok: true, hours };
+}
+
+export const isLeaseLive = (lease, now = Date.now()) => Boolean(lease) && Number(lease.endsAt ?? 0) > now;
+
+export const leaseRemainingMs = (lease, now = Date.now()) => Math.max(0, Number(lease?.endsAt ?? 0) - now);
+
+export const liveLeases = (leases = [], now = Date.now()) =>
+  (Array.isArray(leases) ? leases : []).filter((lease) => isLeaseLive(lease, now));
+
+/**
+ * What the tenant can collect right now: elapsed since the last collection, capped at the
+ * same 8 hours as an owned plot, times the rent the server published for that lease.
+ */
+export function leaseCollectible(lease, now = Date.now()) {
+  if (!isLeaseLive(lease, now)) return 0;
+  const since = Math.max(Number(lease.lastCollectedAt ?? 0), Number(lease.startsAt ?? 0));
+  const hours = Math.min(ECONOMY.accrualCapHours, Math.max(0, (now - since) / HOUR_MS));
+  return Math.floor(hours * Math.max(0, Number(lease.rent) || 0));
+}
+
+export function leaseSummary(leases = [], now = Date.now()) {
+  const live = liveLeases(leases, now);
+  return {
+    live: live.length,
+    listed: live.filter((lease) => lease.owner).length,
+    rented: live.filter((lease) => lease.tenant).length,
+    collectible: live
+      .filter((lease) => lease.tenant)
+      .reduce((sum, lease) => sum + leaseCollectible(lease, now), 0)
+  };
+}
+
+/** The lease covering a plot, if any — the owner needs to see it before selling. */
+export function leaseForPlot(state, districtId, plotNo, now = Date.now()) {
+  return (
+    liveLeases(state.leases ?? [], now).find(
+      (lease) => lease.districtId === districtId && Number(lease.plotNo) === Number(plotNo)
+    ) ?? null
+  );
+}
+
+/** Owned plots that are leased out cannot be sold or re-listed until the lease ends. */
+export function isPlotLeased(state, districtId, plotNo, now = Date.now()) {
+  return Boolean(leaseForPlot(state, districtId, plotNo, now));
+}
+
+/** A listing is either a sale or a lease; both share the board and the idempotency table. */
+export const isLeaseListing = (offer) => offer?.kind === 'lease';
+export const saleListings = (offers = []) => (Array.isArray(offers) ? offers : []).filter((offer) => !isLeaseListing(offer));
+export const leaseListings = (offers = []) => (Array.isArray(offers) ? offers : []).filter(isLeaseListing);
+
+export function leaseListingSummary(offers = [], now = Date.now()) {
+  const live = leaseListings(offers).filter((offer) => isOfferLive(offer, now));
+  return {
+    open: live.length,
+    mine: live.filter((offer) => offer.mine).length,
+    cheapest: live.reduce((best, offer) => (best === null || offer.fee < best ? offer.fee : best), null)
+  };
 }

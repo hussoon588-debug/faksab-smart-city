@@ -11,7 +11,7 @@ export const APP = {
   name: 'أفق',
   nameEn: 'OFUQ',
   tagline: 'استثمار حضري ذكي',
-  version: '0.6.0',
+  version: '0.7.0',
   storageKey: 'ofuq:v1',
   schemaVersion: 1,
   numberLocale: 'en-US',
@@ -45,7 +45,22 @@ export const ECONOMY = {
   tierIncomeRate: 0.15,
   xp: { buy: 40, develop: 120, upgrade: 90, collect: 6, sell: 50 },
   /** Player-to-player market: the fee mirrors the sale fee, and offers expire. */
-  market: { feeRate: 0.04, minPrice: 100, maxPrice: 100000000, minHours: 1, maxHours: 168, defaultHours: 48 }
+  market: { feeRate: 0.04, minPrice: 100, maxPrice: 100000000, minHours: 1, maxHours: 168, defaultHours: 48 },
+  /**
+   * Leasing: an owner rents out the *income* of a developed plot for a fixed number of
+   * hours. Ownership never moves — only who collects the rent while the lease runs.
+   */
+  lease: {
+    feeRate: 0.04,
+    minFee: 100,
+    maxFee: 100000000,
+    minHours: 1,
+    maxHours: 168,
+    defaultHours: 24,
+    windowHours: 48,
+    /** Opening suggestion: this share of what the tenant can actually collect. */
+    suggestedRate: 0.6
+  }
 };
 
 /** Level ladder: cumulative XP thresholds, index + 1 = level. */

@@ -20,6 +20,11 @@ import {
   ledgerLabel,
   ledgerReconciles,
   ledgerTotals,
+  leaseCollectible,
+  leaseForPlot,
+  leaseGross,
+  leaseListingSummary,
+  leaseListings,
   marketFee,
   marketSummary,
   offerForPlot,
@@ -38,7 +43,10 @@ import {
   plotValue,
   portfolioValue,
   saleProceeds,
+  suggestedLeaseFee,
   upgradeCost,
+  validateLeaseFee,
+  validateLeaseHours,
   weekDaysLeft,
   weeklyReport
 } from './core.js';
@@ -125,6 +133,7 @@ export function mount(store) {
     renderPortfolio(snap);
     renderLedger(snap);
     renderMarket(snap);
+    renderMyLeases(snap);
     renderReport(snap);
     renderAchievements(snap);
     renderLeague(snap);
@@ -517,6 +526,7 @@ export function mount(store) {
 
     const offers = Array.isArray(state.offers) ? state.offers : [];
     const summary = marketSummary(offers, Date.now());
+    renderLeaseBoard(snap);
     $('marketCount').textContent =
       summary.open === 0 ? 'لا عروض' : `${summary.open} عرض · أرخص ${formatCompact(summary.cheapest)}`;
 
@@ -562,6 +572,192 @@ export function mount(store) {
     view.confirmOffer = null;
     clearTimeout(confirmTimer);
     return act(store.dispatch('acceptOffer', { offerId }), 20);
+  }
+
+  /* ---------------------------------------------------------------- leasing --- */
+
+  const rentOfListing = (offer) =>
+    plotRent({ assetId: offer.assetId, level: offer.level }, districtFor(offer.districtId));
+
+  /** The tenant buys a window, not a plot — but it still costs money, so it arms first. */
+  function handleAcceptLease(offerId) {
+    const offer = leaseListings(store.state.offers ?? []).find((item) => item.id === offerId);
+    if (!offer) return act({ ok: false, message: 'عرض الإيجار لم يعد متاحاً.' });
+    if (view.confirmOffer !== offerId) {
+      view.confirmOffer = offerId;
+      clearTimeout(confirmTimer);
+      confirmTimer = setTimeout(() => {
+        view.confirmOffer = null;
+        render();
+      }, 6000);
+      render();
+      return toast(`اضغط مرة أخرى لتأكيد استئجار قطعة ${offer.plotNo} بـ ${formatNumber(offer.fee)}.`);
+    }
+    view.confirmOffer = null;
+    clearTimeout(confirmTimer);
+    return act(store.dispatch('acceptLease', { offerId }), 20);
+  }
+
+  function leaseRow(offer, now) {
+    const district = districtFor(offer.districtId);
+    const asset = assetFor(offer.assetId);
+    const rent = rentOfListing(offer);
+    const capacity = leaseGross(rent, offer.hours ?? 0);
+    const share = capacity > 0 ? Math.round((offer.fee / capacity) * 100) : 0;
+    const armed = view.confirmOffer === offer.id;
+    const action = offer.mine
+      ? `<button class="btn btn-ghost sm" type="button" data-action="cancel-offer" data-offer="${offer.id}">إلغاء العرض</button>`
+      : `<button class="btn ${armed ? 'btn-danger' : 'btn-gold'} sm" type="button" data-action="accept-lease" data-offer="${offer.id}">
+           ${armed ? `تأكيد الاستئجار بـ ${formatNumber(offer.fee)}` : `استئجار بـ ${formatNumber(offer.fee)}`}
+         </button>`;
+    return `<article class="market-row">
+      <header>
+        <b>${escapeHtml(district?.name ?? '')} · قطعة ${offer.plotNo}</b>
+        <small>${offer.mine ? 'عرضك' : `يؤجّرها ${escapeHtml(offer.sellerName || 'لاعب')}`}</small>
+      </header>
+      <div class="market-meta">
+        <span><b>${formatNumber(offer.fee)}</b> عملة</span>
+        <span>${escapeHtml(asset?.name ?? 'أرض')} · ${offer.hours} ساعة</span>
+        <span class="lease-hours">إيجار الأصل ${formatNumber(rent)}/ساعة · مدة العقد ${escapeHtml(counted(offer.hours ?? 0, ['ساعة', 'ساعتان', 'ساعات', 'ساعة']))}</span>
+        <span>ينتهي العرض بعد ${escapeHtml(formatRemaining(offerRemainingMs(offer, now)))}</span>
+      </div>
+      <div class="market-meta">
+        <span>أقصى ما يجمعه المستأجر ${formatNumber(capacity)} — تدفع ${share}% منه مقدماً</span>
+      </div>
+      <div class="market-actions">${action}</div>
+    </article>`;
+  }
+
+  function renderLeaseBoard(snap) {
+    const list = $('leaseList');
+    const gate = $('leaseGate');
+    const empty = $('leaseEmpty');
+    const note = $('leaseNote');
+    if (!list || !gate || !empty) return;
+
+    const offers = leaseListings(snap.state.offers ?? []);
+    const summary = leaseListingSummary(snap.state.offers ?? [], Date.now());
+    $('leaseCount').textContent =
+      summary.open === 0 ? 'لا عروض' : `${summary.open} عرض · أرخص ${formatCompact(summary.cheapest)}`;
+
+    if (!store.auth.available || !store.auth.signedIn) {
+      note.textContent = store.auth.available
+        ? 'سجّل الدخول لعرض إيجارات اللاعبين واستئجار دخل أصولهم.'
+        : 'هذه النسخة تعمل محلياً: الإيجار بين لاعبين حقيقيين لا يمكن اختراعه.';
+      gate.hidden = false;
+      list.innerHTML = '';
+      empty.hidden = true;
+      return;
+    }
+
+    gate.hidden = true;
+    note.textContent =
+      summary.mine > 0
+        ? `لديك ${summary.mine} عرض إيجار مفتوح. العمولة ٤٪ تُخصم من المالك عند التسليم.`
+        : 'استأجر دخل أصل من لاعب آخر لمدة محددة، واجمعه قبل انتهاء المدة.';
+    empty.hidden = offers.length > 0;
+    list.innerHTML = offers.map((offer) => leaseRow(offer, Date.now())).join('');
+  }
+
+  /** Leases and listings the player is part of, shown where the money already lives. */
+  function renderMyLeases(snap) {
+    const card = $('leaseCard');
+    const list = $('myLeaseList');
+    if (!card || !list) return;
+    const now = store.now;
+    const leases = (snap.state.leases ?? []).filter((lease) => lease.endsAt > now);
+    card.hidden = leases.length === 0;
+    if (leases.length === 0) {
+      list.innerHTML = '';
+      return;
+    }
+    $('myLeaseCount').textContent = `${leases.length} عقد`;
+    list.innerHTML = leases
+      .map((lease) => {
+        const district = districtFor(lease.districtId);
+        const asset = assetFor(lease.assetId);
+        const left = formatRemaining(lease.endsAt - now);
+        if (!lease.tenant) {
+          return `<div class="market-row">
+            <header><b>${escapeHtml(district?.name ?? '')} · قطعة ${lease.plotNo}</b><small>مؤجَّرة إلى ${escapeHtml(lease.lesseeName || 'لاعب')}</small></header>
+            <div class="market-meta">
+              <span>${escapeHtml(asset?.name ?? 'أصل')} · ${formatNumber(lease.rent)}/ساعة</span>
+              <span>تعود إليك بعد ${escapeHtml(left)}</span>
+              <span>استلمت ${formatNumber(lease.fee)} مقدماً</span>
+            </div>
+          </div>`;
+        }
+        const pending = leaseCollectible(lease, now);
+        return `<div class="market-row">
+          <header><b>${escapeHtml(district?.name ?? '')} · قطعة ${lease.plotNo}</b><small>مستأجرة من ${escapeHtml(lease.lessorName || 'لاعب')}</small></header>
+          <div class="market-meta">
+            <span>${escapeHtml(asset?.name ?? 'أصل')} · ${formatNumber(lease.rent)}/ساعة</span>
+            <span>ينتهي بعد ${escapeHtml(left)}</span>
+          </div>
+          <div class="lease-catch">
+            <span><b>${formatNumber(pending)}</b> عملة جاهزة للتحصيل<small>${pending > 0 ? 'التحصيل يذهب إلى محفظتك' : 'لم يتراكم إيجار بعد'}</small></span>
+            <button class="btn btn-gold sm" type="button" data-action="collect-lease" data-plot="${lease.plotId}" ${pending > 0 ? '' : 'disabled'}>
+              تحصيل
+            </button>
+          </div>
+        </div>`;
+      })
+      .join('');
+  }
+
+  function handleListLease() {
+    const key = view.sheetKey;
+    const plot = store.state.plots[key];
+    if (!plot) return act({ ok: false, message: 'لا توجد قطعة لتأجيرها.' });
+    const feeCheck = validateLeaseFee($('leaseFee')?.value);
+    if (!feeCheck.ok) return act(feeCheck);
+    const hoursCheck = validateLeaseHours($('leaseHours')?.value);
+    if (!hoursCheck.ok) return act(hoursCheck);
+    return act(store.dispatch('listLease', { plotKey: key, fee: feeCheck.fee, hours: hoursCheck.hours }), 16);
+  }
+
+  /**
+   * The lease block inside the plot sheet: the running contract if there is one, the form
+   * if the player can sign one, and an honest line when there is no server to sign on.
+   */
+  function renderLeaseBlock(plot, district, state) {
+    const now = store.now;
+    const live = leaseForPlot(state, plot.districtId, plot.plotNo, now);
+    if (live) {
+      return `<div class="sheet-history lease-live">
+        <h3>مؤجَّرة</h3>
+        <p><b>${escapeHtml(live.lesseeName || 'لاعب')}</b> يجمع إيجار الأصل — تعود إليك بعد ${escapeHtml(
+          formatRemaining(live.endsAt - now)
+        )}.</p>
+        <small>استلمت ${formatNumber(live.fee)} مقدماً · العمولة ٤٪ خُصمت عند التسليم.</small>
+      </div>`;
+    }
+    if (!plot.assetId) return '';
+    const rent = plotRent(plot, district);
+    const hours = ECONOMY.lease.defaultHours;
+    const suggested = suggestedLeaseFee(rent, hours);
+    const capacity = leaseGross(rent, hours);
+
+    if (!store.auth.available) {
+      return `<div class="offer-live"><small>تأجير دخل هذا الأصل يحتاج خادماً مُهيّأً — يستطيع أي لاعب استئجاره لمدة تحددها. إيجار الأصل ${formatNumber(rent)}/ساعة، وأقصى ما يجمعه المستأجر في ${counted(hours, ['ساعة', 'ساعتين', 'ساعات', 'ساعة'])} ${formatNumber(capacity)} عملة.</small></div>`;
+    }
+    if (!store.auth.signedIn) {
+      return `<div class="offer-live"><small>سجّل الدخول لعرض دخل هذا الأصل للإيجار.</small></div>`;
+    }
+    return `<div class="offer-form">
+      <label>
+        <span>أجّر دخل الأصل لمدة</span>
+        <input id="leaseHours" type="number" inputmode="numeric" min="${ECONOMY.lease.minHours}" max="${ECONOMY.lease.maxHours}" step="1" value="${hours}">
+      </label>
+      <label>
+        <span>المقابل الذي تطلبه (${ECONOMY.lease.minFee} عملة كحد أدنى)</span>
+        <input id="leaseFee" type="number" inputmode="numeric" min="${ECONOMY.lease.minFee}" step="10" value="${suggested}">
+      </label>
+      <small id="leaseNet">صافي لك بعد العمولة: ${formatNumber(offerProceeds(suggested))}</small>
+      <small class="lease-hours">أقصى ما يجمعه المستأجر في هذه المدة ${formatNumber(capacity)} عملة (${formatNumber(rent)}/ساعة، وسقف التراكم ٨ ساعات في المرة).</small>
+      <button class="btn btn-gold" type="button" data-action="list-lease">انشر عرض الإيجار</button>
+      <small class="fineprint">الملكية تبقى لك، ولا يمكنك بيع الأصل أو تأجيره مرة أخرى حتى تنتهي المدة.</small>
+    </div>`;
   }
 
   function handleListOffer() {
@@ -823,6 +1019,7 @@ export function mount(store) {
       </button>
       <button type="button" class="btn btn-danger" data-action="sell">بيع القطعة</button>
       ${renderOfferBlock(plot, district, state)}
+      ${renderLeaseBlock(plot, district, state)}
       ${renderPlotHistory(key, state)}`;
   }
 
@@ -1001,6 +1198,11 @@ export function mount(store) {
       return act(store.dispatch('cancelOffer', { offerId: target.dataset.offer }), 10);
     }
     if (target.dataset.action === 'list-offer') return handleListOffer();
+    if (target.dataset.action === 'accept-lease') return handleAcceptLease(target.dataset.offer);
+    if (target.dataset.action === 'list-lease') return handleListLease();
+    if (target.dataset.action === 'collect-lease') {
+      return act(store.dispatch('collectLease', { plotId: target.dataset.plot }), 18);
+    }
 
     if (target.dataset.action?.startsWith('zoom-')) {
       const zoom = { 'zoom-in': 'zoomIn', 'zoom-out': 'zoomOut', 'zoom-reset': 'reset' }[target.dataset.action];
@@ -1109,14 +1311,13 @@ export function mount(store) {
   );
 
   document.addEventListener('input', (event) => {
-    if (event.target?.id !== 'offerPrice') return;
-    const node = $('offerNet');
+    const id = event.target?.id;
+    if (id !== 'offerPrice' && id !== 'leaseFee') return;
+    const node = $(id === 'offerPrice' ? 'offerNet' : 'leaseNet');
     if (!node) return;
-    const price = Number(event.target.value);
+    const value = Number(event.target.value);
     node.textContent =
-      Number.isFinite(price) && price > 0
-        ? `صافي لك بعد العمولة: ${formatNumber(offerProceeds(price))}`
-        : '';
+      Number.isFinite(value) && value > 0 ? `صافي لك بعد العمولة: ${formatNumber(offerProceeds(value))}` : '';
   });
 
   const searchInput = $('citySearch');

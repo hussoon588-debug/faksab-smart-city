@@ -88,6 +88,36 @@ different product: a real listing, a real price and a real counterparty.
 Non-monetary actions are idempotent too: `ofuq_market_requests (player_id, request_key)` makes a
 retried `list`/`cancel`/`accept` a no-op that returns the current snapshot.
 
+
+## Leasing (renting the income, not the plot)
+
+A sale moves the deed. A **lease** moves only the *income* for a fixed window: the tenant pays
+up front, collects the rent until the clock runs out, and the plot goes back to earning for its
+owner. Ownership never changes hands, so nobody loses a building they paid for.
+
+- **Listing** happens from the plot sheet, next to the market block: a fee (minimum 100), a
+  window of 1–168 hours (24 by default) and a 48-hour listing clock. The sheet shows the net
+  after the 4% fee, the rent per hour, and how much the tenant can actually collect.
+- **Accrued rent is settled to the owner first.** The instant a lease is accepted, whatever the
+  plot earned since the owner's last collection is paid to the owner in its own `rent` row. The
+  handover never confiscates earned income, and the tenant starts from zero.
+- **While the lease runs** the owner cannot collect («الإيجار للمستأجر حتى نهاية المدة»), cannot
+  sell to the city, and cannot list the plot for sale. The tenant collects through the normal
+  `ofuq_collect_rent`, capped at the same 8 hours.
+- **When it ends** the income returns to the owner automatically: leases are read as
+  `status = 'active' and ends_at > now()`, and `ofuq_expire_leases()` closes stale rows.
+- **One transaction, three ledger rows**: the tenant is debited `lease_payment`, the owner is
+  credited `lease_income` and charged `market_fee`.
+- **No simulation.** In local mode the lease board shows a gate; no lease is ever invented.
+
+| RPC | What it guarantees |
+| --- | --- |
+| `ofuq_list_lease(plot, fee, hours, window, key)` | ownership, developed plot, no running lease, no open offer, fee/hour bounds |
+| `ofuq_accept_lease(offer, key)` | lease offer only, not your own, live offer, unchanged ownership, no running lease, sufficient balance, settles accrued rent, atomic handover |
+
+A lease is private: `ofuq_leases` is readable only by its two players, while the *listing* lives
+on the public market board like any other offer.
+
 ## The ledger
 
 Money is not a number that changes; it is the sum of movements. Every action that touches the
@@ -96,6 +126,7 @@ balance writes exactly one row — `{ reason, amount, balanceAfter, ref, ts }` �
 
 - **Same vocabulary in both modes.** Reasons are the SQL strings: `signup_bonus`,
   `plot_purchase`, `development`, `upgrade`, `rent`, `sale`, `mission_reward`, `market_fee`,
+  `lease_payment`, `lease_income`,
   `admin_adjustment` — plus `opening_balance` for a wallet that predates the ledger.
 - **`balanceAfter` is the proof.** The wallet prints «الرصيد X — مطابق للسجل» by comparing the
   newest row with the balance. If they ever disagree the screen says so instead of hiding it.
@@ -203,6 +234,7 @@ listing. Those are provider features that need a domain and an identity decision
 - Missions beyond the `ofuq_missions` seeds, and the admin console. The ledger already has
   `mission_reward` and `admin_adjustment` reasons so those flows need no history migration.
 - A browser-side market in local mode: deliberately not built — see «The market» above.
+- A local-mode lease: renting needs two real accounts, so the board stays gated instead.
 - The SQL has been validated by review and by the fake server, **not executed against a live
   Postgres** — no database is available in the build sandbox.
 

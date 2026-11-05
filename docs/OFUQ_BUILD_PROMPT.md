@@ -84,7 +84,7 @@
 2. **لا أصفار ميتة**: أي قطعة بلا أصل لا تدرّ شيئاً، ويجب أن تقول الواجهة ذلك.
 3. **رسوم معلنة**: 4% عند البيع تظهر في شاشة التأكيد قبل التنفيذ.
 4. **الدفتر كامل ولا يُحذف**: بنوده `signup_bonus, plot_purchase, development, upgrade,
-   rent, sale, mission_reward, market_fee, admin_adjustment`. أي رصيد يمكن تفسيره بجمع بنوده.
+   rent, sale, mission_reward, market_fee, admin_adjustment, lease_payment, lease_income`. أي رصيد يمكن تفسيره بجمع بنوده.
 
 ### 5· نموذج البيانات
 

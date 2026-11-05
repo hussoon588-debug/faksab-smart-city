@@ -19,6 +19,8 @@ import {
   plotValue,
   saleProceeds,
   upgradeCost,
+  validateLeaseFee,
+  validateLeaseHours,
   validatePlayerName,
   weekKey
 } from './core.js';
@@ -37,6 +39,8 @@ export function createInitialState(now = Date.now()) {
     claims: {},
     // The board is server-owned; locally it is always empty (no simulated sellers).
     offers: [],
+    // Active leases are server-owned too: renting needs two real accounts.
+    leases: [],
     // Append-only in spirit: newest first, capped, and every row explains one balance move.
     ledger: [
       {
@@ -71,6 +75,7 @@ export function migrate(raw, now = Date.now()) {
     claims: {},
     // The board is server-owned; locally it is always empty (no simulated sellers).
     offers: [],
+    leases: [],
     week: { ...base.week, ...(typeof raw.week === 'object' && raw.week ? raw.week : {}) },
     stats: { ...base.stats, ...(typeof raw.stats === 'object' && raw.stats ? raw.stats : {}) },
     settings: { ...base.settings, ...(typeof raw.settings === 'object' && raw.settings ? raw.settings : {}) }
@@ -425,6 +430,9 @@ export function createStore({ storage = browserStorage(), now = () => Date.now()
     listOffer: () => MARKET_LOCAL,
     cancelOffer: () => MARKET_LOCAL,
     acceptOffer: () => MARKET_LOCAL,
+    listLease: () => MARKET_LOCAL,
+    acceptLease: () => MARKET_LOCAL,
+    collectLease: () => MARKET_LOCAL,
     setName: ({ name }) => actions.setName(name),
     toggleHaptics: () => actions.toggleHaptics(),
     reset: () => actions.reset()
@@ -512,6 +520,40 @@ export function createStore({ storage = browserStorage(), now = () => Date.now()
             idempotencyKey: payload.idempotencyKey ?? createIdempotencyKey('accept')
           });
           break;
+        case 'listLease': {
+          const plot = plotFor();
+          if (!plot?.id) return { ok: false, message: 'هذه القطعة غير مسجّلة على الخادم بعد.' };
+          if (!plot.assetId) return { ok: false, message: 'طوّر القطعة قبل تأجيرها.' };
+          if (state.leases?.some((lease) => lease.plotId === plot.id && lease.endsAt > Date.now())) {
+            return { ok: false, message: 'هذه القطعة مؤجَّرة بالفعل — انتظر انتهاء الإيجار.' };
+          }
+          const fee = Math.round(Number(payload.fee));
+          const feeCheck = validateLeaseFee(fee);
+          if (!feeCheck.ok) return { ok: false, message: feeCheck.error };
+          const hoursCheck = validateLeaseHours(payload.hours);
+          if (!hoursCheck.ok) return { ok: false, message: hoursCheck.error };
+          result = await remote.listLease({
+            plotId: plot.id,
+            fee: feeCheck.fee,
+            hours: hoursCheck.hours,
+            windowHours: payload.windowHours ?? ECONOMY.lease.windowHours,
+            idempotencyKey: payload.idempotencyKey ?? createIdempotencyKey('lease')
+          });
+          break;
+        }
+        case 'acceptLease':
+          result = await remote.acceptLease({
+            offerId: payload.offerId,
+            idempotencyKey: payload.idempotencyKey ?? createIdempotencyKey('lease-accept')
+          });
+          break;
+        case 'collectLease':
+          if (!payload.plotId) return { ok: false, message: 'عقد الإيجار غير معروف.' };
+          result = await remote.collectRent({
+            plotId: payload.plotId,
+            idempotencyKey: payload.idempotencyKey ?? createIdempotencyKey('lease-collect')
+          });
+          break;
         case 'claim':
           result = await remote.claimMission({
             missionId: payload.challengeId,
@@ -538,7 +580,10 @@ export function createStore({ storage = browserStorage(), now = () => Date.now()
         claim: `تم استلام مكافأة التحدي (${gained.toLocaleString(APP.numberLocale)} عملة).`,
         listOffer: 'تم نشر العرض — أي لاعب في المدينة يمكنه قبوله الآن.',
         cancelOffer: 'تم إلغاء العرض وعادت القطعة إلى محفظتك.',
-        acceptOffer: `تم شراء القطعة من لاعب آخر (−${Math.abs(gained).toLocaleString(APP.numberLocale)} عملة).`
+        acceptOffer: `تم شراء القطعة من لاعب آخر (−${Math.abs(gained).toLocaleString(APP.numberLocale)} عملة).`,
+        listLease: 'تم نشر عرض الإيجار — يستطيع أي لاعب استئجار دخل الأصل.',
+        acceptLease: `تم استئجار الأصل (−${Math.abs(gained).toLocaleString(APP.numberLocale)} عملة) — اجمعه قبل انتهاء المدة.`,
+        collectLease: `تم تحصيل إيجار الأصل المستأجر (${gained.toLocaleString(APP.numberLocale)} عملة).`
       };
       return { ok: true, message: messages[type] ?? 'تم التنفيذ.' };
     } catch (error) {
@@ -622,6 +667,10 @@ export function createStore({ storage = browserStorage(), now = () => Date.now()
     },
     get ephemeral() {
       return ephemeral;
+    },
+    /** The store clock — the UI reads time from here so tests and leases agree. */
+    get now() {
+      return now();
     },
     /** 'local' (offline shell) or 'supabase' (server owns balance + ownership). */
     get mode() {

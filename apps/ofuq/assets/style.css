@@ -591,3 +591,9 @@ body::after {
 .achievement.is-done .achievement-bar i { background: var(--green); }
 .achievement-value { font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .achievement.is-done .achievement-value { color: var(--green); }
+
+/* ----------------------------------------------------------------- leases --- */
+.lease-hours { font-size: 10.5px; color: var(--muted); }
+.lease-catch { display: flex; gap: 8px; align-items: center; justify-content: space-between; padding: 9px 10px; border: 1px solid rgba(51, 224, 140, 0.28); border-radius: 13px; background: rgba(51, 224, 140, 0.06); }
+.lease-catch b { font-size: 12px; }
+.lease-catch small { display: block; font-size: 10px; color: var(--muted); }

@@ -137,6 +137,20 @@
         </div>
         <p class="fineprint">كل عرض هنا لقطعة حقيقية يملكها لاعب حقيقي. العمولة ٤٪ تُخصم من البائع وتظهر سطراً مستقلاً في دفتره.</p>
       </div>
+      <div class="card">
+        <div class="card-head">
+          <h2>للإيجار</h2>
+          <span class="pill" id="leaseCount">—</span>
+        </div>
+        <p class="meta" id="leaseNote">—</p>
+        <div class="market" id="leaseList"></div>
+        <p class="empty" id="leaseEmpty" hidden>لا أحد يؤجّر الآن — اعرض دخل أصلك للإيجار من لوحة القطعة.</p>
+        <div class="market-gate" id="leaseGate" hidden>
+          <p>تأجير دخل أصل يحتاج جلسة خادم — الإيجار بين لاعبين حقيقيين فقط.</p>
+          <button class="btn btn-gold" type="button" data-action="open-account">فتح لوحة الحساب</button>
+        </div>
+        <p class="fineprint">المستأجر يدفع المبلغ مقدماً ويجمع إيجار الأصل حتى نهاية المدة، ثم يعود الدخل للمالك. الملكية لا تنتقل أبداً، والإيجار المتراكم قبل التسليم يُسوّى للمالك.</p>
+      </div>
     </section>
 
     <section class="view" id="view-portfolio" role="tabpanel" aria-label="المحفظة" hidden>
@@ -153,6 +167,14 @@
         <div class="card-head"><h2>الأصول</h2></div>
         <div class="assets" id="assetList"></div>
         <p class="empty" id="emptyPortfolio" hidden>لا توجد أصول بعد. ابدأ بشراء قطعة من تبويب المدينة.</p>
+      </div>
+      <div class="card" id="leaseCard" hidden>
+        <div class="card-head">
+          <h2>إيجاراتي</h2>
+          <span class="pill" id="myLeaseCount">—</span>
+        </div>
+        <div class="market" id="myLeaseList"></div>
+        <p class="fineprint">الأصل المستأجر يظهر هنا مع إيجاره المتراكم: اجمعه قبل انتهاء المدة. المالك استلم المبلغ مقدماً ولا يجمع أثناء الإيجار.</p>
       </div>
       <div class="card">
         <div class="card-head">
