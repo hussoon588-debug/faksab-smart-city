@@ -3,6 +3,7 @@
 Arabic RTL real-estate city game. The web build is published on GitHub Pages:
 
 - Game: https://hussoon588-debug.github.io/faksab-smart-city/
+- OFUQ (new product in this repo): https://hussoon588-debug.github.io/faksab-smart-city/apps/ofuq/
 - Hub: https://hussoon588-debug.github.io/projects/
 
 ## What is in this release
@@ -11,6 +12,9 @@ Arabic RTL real-estate city game. The web build is published on GitHub Pages:
 - Shared world layer (`src/supabase-world.js`) — Supabase Auth + PostgreSQL `plots`
   table + Realtime, five cities × 50 plots, atomic `purchase_plot` RPC.
 - `supabase/schema.sql` — tables, RLS, trigger, seed data and the purchase function.
+- **OFUQ · أفق** (`apps/ofuq/`) — separate product: a local-first urban-investment
+  simulation with its own app shell, pure simulation core and tests. See
+  [`docs/OFUQ.md`](docs/OFUQ.md).
 
 ## Backend setup (one time, owner's dashboard)
 

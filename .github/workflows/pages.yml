@@ -23,6 +23,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Install dev dependencies
+        run: npm ci
       - name: Audit and build
         run: |
           npm run check

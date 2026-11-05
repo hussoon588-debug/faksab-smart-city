@@ -93,4 +93,4 @@ await fs.writeFile(
 
 const totalBytes = files.reduce((sum, file) => sum + file.bytes, 0);
 console.log(`✔ build complete — ${files.length} files · ${(totalBytes / 1024 / 1024).toFixed(2)} MB → dist/`);
-for (const app of apps) console.log(`  • ${app.label} ${app.version} → /${app.root === '.' ? '' : app.root.replace(/^apps\//, '')}`);
+for (const app of apps) console.log(`  • ${app.label} ${app.version} → /${app.root === '.' ? '' : `${app.root}/`}`);

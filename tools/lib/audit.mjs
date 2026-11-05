@@ -303,8 +303,12 @@ export async function auditServiceWorker(root, swAbs, app, rep) {
     const target = path.resolve(path.dirname(swAbs), entry);
     if (!(await exists(target))) rep.error(scope, `precached file not found "${entry}"`);
   }
-  if (/\/faksab-smart-city\//.test(source) && app?.id !== 'faksab') {
-    rep.warn(scope, 'hard-coded FAKSAB path found in a non-FAKSAB service worker');
+  if (app?.id !== 'faksab') {
+    // Comments may legitimately mention the published FAKSAB path; code must not.
+    const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+    if (/\/faksab-smart-city\//.test(code)) {
+      rep.warn(scope, 'hard-coded FAKSAB path found in a non-FAKSAB service worker');
+    }
   }
 }
 
@@ -360,7 +364,13 @@ export async function auditRepo(root) {
 
   for (const app of apps) {
     for (const required of app.requiredFiles ?? []) {
-      if (!(await exists(path.join(root, required)))) rep.error(rel(root, path.join(root, required)), `required file missing (declared in config/apps.json for "${app.id}")`);
+      // Required paths are relative to the app root unless they already include it.
+      const target = required.startsWith(`${app.root}/`) || app.root === '.'
+        ? path.join(root, required)
+        : path.join(root, app.root, required);
+      if (!(await exists(target))) {
+        rep.error(rel(root, target), `required file missing (declared in config/apps.json for "${app.id}")`);
+      }
     }
     const entry = path.join(root, app.entry);
     if (await exists(entry)) {

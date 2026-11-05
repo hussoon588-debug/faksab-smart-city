@@ -1,0 +1,477 @@
+/**
+ * OFUQ — view layer.
+ *
+ * Renders the whole shell from a store snapshot and routes every interaction
+ * through `data-action` delegation, so there is no inline JS and no global state
+ * beyond the current tab / open sheet.
+ */
+import { APP, ASSET_TYPES, DISTRICTS, ECONOMY } from './config.js';
+import {
+  assetFor,
+  challengeBoard,
+  districtFor,
+  districtStats,
+  formatCompact,
+  formatNumber,
+  hourlyIncome,
+  leaderboard,
+  netWorth,
+  netYield,
+  pendingRent,
+  plotKey,
+  plotPrice,
+  plotRent,
+  plotValue,
+  portfolioValue,
+  saleProceeds,
+  upgradeCost,
+  weekDaysLeft
+} from './core.js';
+
+const $ = (id) => document.getElementById(id);
+
+const ICONS = {
+  home: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/></svg>',
+  store: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h16v11H4z"/><path d="M3 9l2-5h14l2 5"/><path d="M9 20v-6h6v6"/></svg>',
+  tower: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V6l6-3v18M12 21h7V11h-7"/><path d="M9 9v.01M9 13v.01M9 17v.01"/></svg>',
+  star: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.9 6.1 21l1.2-6.5L2.5 9.9 9.1 9z"/></svg>',
+  lock: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg>'
+};
+
+const escapeHtml = (value) =>
+  String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+
+export function mount(store) {
+  const view = { current: 'city', district: DISTRICTS[0].id, sheetKey: null, settingsOpen: false };
+  let toastTimer = 0;
+  let resetArmed = false;
+
+  /* --------------------------------------------------------------- helpers */
+
+  const vibrate = (ms) => {
+    if (!store.state.settings?.haptics) return;
+    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') navigator.vibrate(ms);
+  };
+
+  function toast(message, kind = 'ok') {
+    const node = $('toast');
+    node.textContent = message;
+    node.classList.toggle('is-bad', kind === 'bad');
+    node.classList.add('is-open');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => node.classList.remove('is-open'), 2600);
+  }
+
+  const act = (result, haptic = 12) => {
+    if (result?.message) toast(result.message, result.ok ? 'ok' : 'bad');
+    if (result?.ok) vibrate(haptic);
+    return result;
+  };
+
+  /* ---------------------------------------------------------------- render */
+
+  function render() {
+    const snap = store.snapshot();
+    renderHeader(snap);
+    renderCity(snap);
+    renderPortfolio(snap);
+    renderLeague(snap);
+    if (view.sheetKey) renderSheet(snap);
+    renderSettingsState();
+  }
+
+  function renderHeader(snap) {
+    const { state } = snap;
+    const pending = Object.values(snap.pending).reduce((sum, value) => sum + value, 0);
+    const readyCount = Object.values(snap.pending).filter((value) => value > 0).length;
+
+    $('netWorth').textContent = formatCompact(netWorth(state));
+    $('cash').textContent = formatCompact(state.cash);
+    $('income').textContent = `${formatCompact(hourlyIncome(state))}`;
+
+    $('levelNum').textContent = String(snap.level.level);
+    $('levelName').textContent = snap.level.name;
+    $('levelNext').textContent = snap.level.maxed ? 'أعلى مستوى' : `${formatCompact(snap.level.xpForNext)} خبرة للمستوى ${snap.level.level + 1}`;
+    const bar = $('levelBar');
+    bar.firstElementChild.style.width = `${Math.round(snap.level.progress * 100)}%`;
+    bar.setAttribute('aria-valuenow', String(Math.round(snap.level.progress * 100)));
+
+    $('collectAll').disabled = pending <= 0;
+    $('collectHint').textContent =
+      pending > 0
+        ? `${readyCount} أصل جاهز · ${formatNumber(pending)} عملة قابلة للتحصيل`
+        : 'الإيجار يتراكم تلقائياً حتى ٨ ساعات وأنت بعيد.';
+
+    $('citySummary').textContent = `${Object.keys(state.plots).length} قطعة من ${DISTRICTS.reduce((sum, d) => sum + d.plots, 0)}`;
+    $('versionLabel').textContent = `${APP.nameEn} ${APP.version}`;
+    $('modeLabel').textContent = APP.backend.mode === 'local' ? 'محلي' : APP.backend.mode;
+    $('storageWarn').hidden = !store.ephemeral;
+  }
+
+  function renderCity(snap) {
+    const { state } = snap;
+    const level = snap.level.level;
+
+    $('districtTabs').innerHTML = DISTRICTS.map((district) => {
+      const locked = level < district.unlockLevel;
+      const active = district.id === view.district;
+      return `<button type="button" class="chip ${active ? 'is-active' : ''} ${locked ? 'is-locked' : ''}"
+        role="tab" aria-selected="${active}" data-district="${district.id}"
+        title="${locked ? `يُفتح في المستوى ${district.unlockLevel}` : district.name}">
+        ${district.name}${locked ? ' 🔒' : ''}</button>`;
+    }).join('');
+
+    const district = districtFor(view.district) ?? DISTRICTS[0];
+    const stats = districtStats(state, district);
+    const locked = level < district.unlockLevel;
+    const price = plotPrice(district);
+    $('districtMeta').textContent = locked
+      ? `يُفتح ${district.name} في المستوى ${district.unlockLevel} — أكمل استثمارك في الأحياء المتاحة.`
+      : `${district.name} · سعر القطعة ${formatNumber(price)} عملة · تملك ${stats.owned} من ${stats.total} · تطوير ${stats.developed}`;
+
+    const now = Date.now();
+    const plots = [];
+    for (let no = 1; no <= district.plots; no += 1) {
+      const key = plotKey(district.id, no);
+      const plot = state.plots[key];
+      const pending = plot ? pendingRent(plot, district, now) : 0;
+      const built = Boolean(plot?.assetId);
+      const classes = ['plot'];
+      if (!plot) classes.push(locked ? 'is-locked' : 'is-free');
+      else if (!built) classes.push('is-owned');
+      else classes.push('is-built');
+      if (pending > 0) classes.push('is-ready');
+      const label = !plot
+        ? `${formatCompact(price)}`
+        : built
+          ? `${formatCompact(pending)}`
+          : 'أرض';
+      const aria = !plot
+        ? `قطعة ${no} متاحة بسعر ${formatNumber(price)} عملة`
+        : built
+          ? `قطعة ${no} عليها أصل مستوى ${plot.level}، إيجار جاهز ${formatNumber(pending)}`
+          : `قطعة ${no} مملوكة وغير مطوّرة`;
+      plots.push(
+        `<button type="button" class="${classes.join(' ')}" data-plot="${key}" aria-label="${escapeHtml(aria)}" ${locked && !plot ? 'disabled' : ''}>
+          <span>${no}</span><small>${label}</small>${built ? `<span class="lvl">${plot.level}</span>` : ''}
+        </button>`
+      );
+    }
+    $('plotGrid').innerHTML = plots.join('');
+  }
+
+  function renderPortfolio(snap) {
+    const { state } = snap;
+    const value = portfolioValue(state);
+    const income = hourlyIncome(state);
+    const plots = Object.entries(state.plots);
+
+    $('pfValue').textContent = formatCompact(value);
+    $('pfIncome').textContent = formatCompact(income);
+    $('pfYield').textContent = `${(netYield(state) * 100).toFixed(1)}%`;
+    $('pfCount').textContent = String(plots.length);
+
+    $('emptyPortfolio').hidden = plots.length > 0;
+    $('assetList').innerHTML = plots
+      .sort(([, a], [, b]) => (b.assetId ? 1 : 0) - (a.assetId ? 1 : 0) || a.plotNo - b.plotNo)
+      .map(([key, plot]) => {
+        const district = districtFor(plot.districtId);
+        const asset = assetFor(plot.assetId);
+        const rent = asset ? plotRent(plot, district) : 0;
+        const icon = ICONS[asset?.icon ?? 'home'] ?? ICONS.home;
+        return `<button type="button" class="asset" data-plot="${key}" style="text-align:start;font-family:inherit">
+          <span class="asset-ico">${icon}</span>
+          <span class="asset-main">
+            <b>${escapeHtml(asset ? asset.name : 'قطعة أرض')} · ${escapeHtml(district?.name ?? '')} #${plot.plotNo}</b>
+            <small>${asset ? `المستوى ${plot.level} · ${formatNumber(rent)} عملة/ساعة` : 'جاهزة للتطوير'}</small>
+          </span>
+          <span class="asset-side">
+            <b>${formatCompact(plotValue(plot, district))}</b>
+            <small>القيمة</small>
+          </span>
+        </button>`;
+      })
+      .join('');
+  }
+
+  function renderLeague(snap) {
+    const { state } = snap;
+    const rows = leaderboard(state);
+    const me = rows.find((row) => row.you);
+    $('rankBadge').textContent = `#${me.rank}`;
+    $('scoreValue').textContent = formatCompact(me.score);
+    $('weekLeft').textContent = `${weekDaysLeft()} يوم على إغلاق الدوري`;
+
+    const board = challengeBoard(state);
+    $('challengeList').innerHTML = board
+      .map((challenge) => {
+        const pct = Math.round((challenge.progress / challenge.target) * 100);
+        const status = challenge.claimed ? 'تم الاستلام' : challenge.done ? 'جاهز' : `${challenge.progress}/${challenge.target}`;
+        return `<div class="challenge">
+          <div class="challenge-top">
+            <div><b>${escapeHtml(challenge.title)}</b><small>${escapeHtml(challenge.desc)}</small></div>
+            <span class="pill">${status}</span>
+          </div>
+          <div class="challenge-track"><i style="width:${pct}%"></i></div>
+          <div class="challenge-foot">
+            <small>+${formatNumber(challenge.reward)} عملة · ${challenge.xp} خبرة</small>
+            <button type="button" class="btn ${challenge.claimable ? 'btn-gold' : 'btn-ghost'} sm"
+              data-claim="${challenge.id}" ${challenge.claimable ? '' : 'disabled'}>
+              ${challenge.claimed ? 'مستلم' : challenge.done ? 'استلام' : 'غير مكتمل'}
+            </button>
+          </div>
+        </div>`;
+      })
+      .join('');
+
+    $('leaderboard').innerHTML = rows
+      .map(
+        (row) => `<div class="board-row ${row.you ? 'is-you' : ''}">
+          <span class="board-rank">${row.rank}</span>
+          <span class="board-name"><b>${escapeHtml(row.name)}</b><small>${escapeHtml(row.tag)}</small></span>
+          <span class="board-score">${formatCompact(row.score)}</span>
+        </div>`
+      )
+      .join('');
+  }
+
+  /* ----------------------------------------------------------------- sheet */
+
+  function openSheet(key) {
+    view.sheetKey = key;
+    renderSheet(store.snapshot());
+    $('sheet').hidden = false;
+    $('scrim').hidden = false;
+    $('sheetClose').focus();
+  }
+
+  function closeSheet() {
+    view.sheetKey = null;
+    $('sheet').hidden = true;
+    if ($('settings').hidden) $('scrim').hidden = true;
+  }
+
+  function renderSheet(snap) {
+    const { state } = snap;
+    const key = view.sheetKey;
+    const plot = state.plots[key];
+    const [districtId, rawNo] = key.split(':');
+    const district = districtFor(districtId);
+    const no = Number(rawNo);
+    if (!district) return;
+
+    $('sheetTitle').textContent = `قطعة ${no} · ${district.name}`;
+    const level = snap.level.level;
+
+    if (!plot) {
+      const price = plotPrice(district);
+      const locked = level < district.unlockLevel;
+      $('sheetBody').innerHTML = `
+        <p class="sheet-note">قطعة أرض في ${escapeHtml(district.name)} بمعامل سعر ${district.tier.toFixed(2)}×. بناؤها يرفع دخل المحفظة وقيمتها الدفترية.</p>
+        <div class="kv"><span>سعر القطعة</span><b>${formatNumber(price)}</b></div>
+        <div class="kv"><span>سيولتك الحالية</span><b>${formatNumber(state.cash)}</b></div>
+        <div class="kv"><span>أقل دخل بعد التطوير</span><b>${formatNumber(plotRent({ assetId: ASSET_TYPES[0].id, level: 1 }, district))} / ساعة</b></div>
+        <button type="button" class="btn btn-gold" data-action="buy" ${locked || state.cash < price ? 'disabled' : ''}>
+          ${locked ? `يُفتح في المستوى ${district.unlockLevel}` : state.cash < price ? 'السيولة غير كافية' : `شراء القطعة · ${formatNumber(price)}`}
+        </button>`;
+      return;
+    }
+
+    if (!plot.assetId) {
+      const options = ASSET_TYPES.map((asset) => {
+        const unlocked = level >= asset.unlockLevel;
+        const rent = plotRent({ assetId: asset.id, level: 1 }, district);
+        const afford = state.cash >= asset.cost;
+        return `<div class="option">
+          <span>
+            <b>${escapeHtml(asset.name)}</b>
+            <small>${formatNumber(rent)} عملة/ساعة · التكلفة ${formatNumber(asset.cost)}</small>
+          </span>
+          <button type="button" class="btn ${unlocked && afford ? 'btn-gold' : 'btn-ghost'} sm"
+            data-action="develop" data-asset="${asset.id}" ${unlocked && afford ? '' : 'disabled'}>
+            ${!unlocked ? `مستوى ${asset.unlockLevel}` : afford ? 'تطوير' : 'رصيد'}
+          </button>
+        </div>`;
+      }).join('');
+      $('sheetBody').innerHTML = `
+        <p class="sheet-note">القطعة مملوكة وتنتظر التطوير. اختر نوع الأصل — كل مستوى إضافي يرفع الإيجار ${Math.round(ECONOMY.upgradeIncomeRate * 100)}%.</p>
+        ${options}`;
+      return;
+    }
+
+    const asset = assetFor(plot.assetId);
+    const rent = plotRent(plot, district);
+    const pending = pendingRent(plot, district, Date.now());
+    const upgrade = plot.level < ECONOMY.maxLevel ? upgradeCost(plot, district) : 0;
+    $('sheetBody').innerHTML = `
+      <div class="kv"><span>الأصل</span><b>${escapeHtml(asset?.name ?? '')} · المستوى ${plot.level}</b></div>
+      <div class="kv"><span>الإيجار</span><b>${formatNumber(rent)} / ساعة</b></div>
+      <div class="kv"><span>جاهز للتحصيل</span><b>${formatNumber(pending)}</b></div>
+      <div class="kv"><span>القيمة الدفترية</span><b>${formatNumber(plotValue(plot, district))}</b></div>
+      <div class="kv"><span>البيع الصافي (بعد ${Math.round(ECONOMY.saleFeeRate * 100)}%)</span><b>${formatNumber(saleProceeds(plot, district))}</b></div>
+      <button type="button" class="btn btn-gold" data-action="collect" ${pending > 0 ? '' : 'disabled'}>
+        ${pending > 0 ? `تحصيل ${formatNumber(pending)}` : 'لا يوجد إيجار جاهز'}
+      </button>
+      <button type="button" class="btn btn-ghost" data-action="upgrade" ${plot.level < ECONOMY.maxLevel && state.cash >= upgrade ? '' : 'disabled'}>
+        ${plot.level >= ECONOMY.maxLevel ? 'أعلى مستوى' : `ترقية إلى المستوى ${plot.level + 1} · ${formatNumber(upgrade)}`}
+      </button>
+      <button type="button" class="btn btn-danger" data-action="sell">بيع القطعة</button>`;
+  }
+
+  /* -------------------------------------------------------------- settings */
+
+  function openSettings() {
+    view.settingsOpen = true;
+    $('playerName').value = store.state.playerName;
+    $('settings').hidden = false;
+    $('scrim').hidden = false;
+    renderSettingsState();
+    $('playerName').focus();
+  }
+
+  function closeSettings() {
+    view.settingsOpen = false;
+    resetArmed = false;
+    $('resetGame').textContent = 'حذف التقدم والبدء من جديد';
+    $('settings').hidden = true;
+    if ($('sheet').hidden) $('scrim').hidden = true;
+  }
+
+  function renderSettingsState() {
+    const state = store.state;
+    $('settingsVersion').textContent = APP.version;
+    $('hapticsToggle').textContent = state.settings?.haptics ? 'مفعّل' : 'مغلق';
+    $('hapticsToggle').setAttribute('aria-pressed', String(Boolean(state.settings?.haptics)));
+    $('syncState').textContent = store.ephemeral ? 'الحفظ غير متاح — الجلسة مؤقتة' : 'محلي على هذا الجهاز';
+  }
+
+  /* ---------------------------------------------------------------- events */
+
+  function switchView(next) {
+    if (next === view.current) return;
+    view.current = next;
+    for (const tab of document.querySelectorAll('[data-view]')) {
+      const active = tab.dataset.view === next;
+      tab.classList.toggle('is-active', active);
+      tab.setAttribute('aria-selected', String(active));
+    }
+    for (const panel of document.querySelectorAll('.view')) {
+      const active = panel.id === `view-${next}`;
+      panel.classList.toggle('is-active', active);
+      panel.hidden = !active;
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  document.addEventListener('click', (event) => {
+    const target = event.target.closest('[data-view],[data-district],[data-plot],[data-claim],[data-action],#collectAll,#settingsBtn,#sheetClose,#settingsClose,#saveName,#hapticsToggle,#resetGame,#scrim');
+    if (!target) return;
+
+    if (target.dataset.view) return switchView(target.dataset.view);
+
+    if (target.dataset.district) {
+      const district = districtFor(target.dataset.district);
+      if (!district) return;
+      if (store.snapshot().level.level < district.unlockLevel) {
+        return act({ ok: false, message: `${district.name} يُفتح في المستوى ${district.unlockLevel}.` });
+      }
+      view.district = district.id;
+      vibrate(8);
+      return render();
+    }
+
+    if (target.dataset.plot) return openSheet(target.dataset.plot);
+
+    if (target.dataset.claim) return act(store.claim(target.dataset.claim), 30);
+
+    if (target.id === 'collectAll') {
+      const result = store.collectAll();
+      return act(result, 18);
+    }
+
+    if (target.id === 'settingsBtn') return openSettings();
+    if (target.id === 'sheetClose') return closeSheet();
+    if (target.id === 'settingsClose') return closeSettings();
+    if (target.id === 'scrim') {
+      closeSheet();
+      return closeSettings();
+    }
+
+    if (target.id === 'saveName') {
+      const result = store.setName($('playerName').value);
+      if (result.ok) closeSettings();
+      return act(result);
+    }
+
+    if (target.id === 'hapticsToggle') return act(store.toggleHaptics());
+
+    if (target.id === 'resetGame') {
+      if (!resetArmed) {
+        resetArmed = true;
+        target.textContent = 'اضغط مرة أخرى للتأكيد النهائي';
+        setTimeout(() => {
+          resetArmed = false;
+          target.textContent = 'حذف التقدم والبدء من جديد';
+        }, 4000);
+        return;
+      }
+      resetArmed = false;
+      target.textContent = 'حذف التقدم والبدء من جديد';
+      const result = store.reset();
+      closeSettings();
+      return act(result);
+    }
+
+    if (target.dataset.action && view.sheetKey) {
+      const action = target.dataset.action;
+      let result = { ok: false, message: '' };
+      if (action === 'buy') {
+        const [districtId, no] = view.sheetKey.split(':');
+        result = store.buy(districtId, Number(no));
+      } else if (action === 'develop') {
+        result = store.develop(view.sheetKey, target.dataset.asset);
+      } else if (action === 'upgrade') {
+        result = store.upgrade(view.sheetKey);
+      } else if (action === 'collect') {
+        result = store.collect(view.sheetKey);
+      } else if (action === 'sell') {
+        result = store.sell(view.sheetKey);
+        if (result.ok) closeSheet();
+      }
+      return act(result);
+    }
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    if (!view.sheetKey && !view.settingsOpen) return;
+    closeSheet();
+    closeSettings();
+  });
+
+  /* ------------------------------------------------------------------ tick */
+  // Accrued rent changes continuously; refresh the derived UI without persisting.
+  const ticker = setInterval(() => {
+    if (document.hidden || view.settingsOpen) return;
+    render();
+  }, 12000);
+  ticker.unref?.(); // lets headless test runs exit cleanly
+
+  const onVisibility = () => {
+    if (!document.hidden) render();
+  };
+  document.addEventListener('visibilitychange', onVisibility);
+
+  // Every store mutation re-renders; the UI never holds a stale copy of the state.
+  const unsubscribe = store.subscribe(() => render());
+  render();
+
+  /** Detach timers/listeners — used by the DOM smoke test. */
+  function destroy() {
+    clearInterval(ticker);
+    document.removeEventListener('visibilitychange', onVisibility);
+    unsubscribe();
+  }
+
+  return { render, openSheet, closeSheet, toast, destroy };
+}

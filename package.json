@@ -22,5 +22,8 @@
     "pwa",
     "static-site"
   ],
-  "license": "UNLICENSED"
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "jsdom": "^31.0.0"
+  }
 }

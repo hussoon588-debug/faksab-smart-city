@@ -23,6 +23,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+
+      - name: Install dev dependencies (jsdom for the DOM smoke test)
+        run: npm ci
 
       - name: Static audit (strict)
         run: npm run check:strict

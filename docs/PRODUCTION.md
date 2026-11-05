@@ -11,8 +11,8 @@ src/                  FAKSAB shared modules (Supabase world layer) + legacy temp
 supabase/schema.sql   database schema, RLS policies and the atomic purchase_plot RPC
 apps/ofuq/            OFUQ — separate product, own app shell and modules
 config/apps.json      single source of truth: entry points, versions, publish paths
-tools/                dev server, static audit, production build (zero dependencies)
-tests/                node:test suites (unit + build integration)
+tools/                dev server, static audit, production build (Node built-ins only)
+tests/                node:test suites: OFUQ core/store, DOM smoke test (jsdom), tooling
 dist/                 build output (git-ignored)
 ```
 
@@ -23,7 +23,7 @@ dist/                 build output (git-ignored)
 | `npm run dev` | Static dev server on `0.0.0.0:8000` (override with `PORT`). Serves FAKSAB at `/` and OFUQ at `/apps/ofuq/`. |
 | `npm run check` | Static audit: markup, ids, local references, manifests, service workers, JS/CSS syntax, secrets. |
 | `npm run check:strict` | Same as above, but warnings also fail. This is what CI runs. |
-| `npm test` | `node --test` suites. No dependencies, no network. |
+| `npm test` | `node --test` suites. The DOM smoke test needs the single dev dependency (`npm ci`); it skips when `jsdom` is absent, so the suite also runs offline. |
 | `npm run build` | Audit + assemble `dist/` + write `dist/build-info.json` (commit, file hashes). |
 | `npm run verify` | `check && test && build` — run this before pushing. |
 

@@ -28,6 +28,32 @@
         "vendor",
         "src/supabase-world.js"
       ]
+    },
+    {
+      "id": "ofuq",
+      "label": "OFUQ",
+      "version": "0.1.0",
+      "root": "apps/ofuq",
+      "entry": "apps/ofuq/index.html",
+      "manifest": "apps/ofuq/manifest.webmanifest",
+      "serviceWorker": "apps/ofuq/sw.js",
+      "publishedBasePath": "apps/ofuq/",
+      "requiredFiles": [
+        "index.html",
+        "manifest.webmanifest",
+        "sw.js",
+        "assets/style.css",
+        "assets/icon-192.png",
+        "assets/icon-512.png",
+        "src/main.js",
+        "src/config.js",
+        "src/core.js",
+        "src/store.js",
+        "src/ui.js"
+      ],
+      "copy": [
+        "apps/ofuq"
+      ]
     }
   ]
 }

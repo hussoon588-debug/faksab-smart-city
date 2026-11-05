@@ -24,7 +24,11 @@ test('production build emits a deployable dist/ with a verifiable manifest', asy
   const apps = await loadConfig(ROOT);
   for (const app of apps) {
     for (const required of app.requiredFiles) {
-      assert.ok(await exists(path.join(DIST, required)), `${app.id}: ${required} missing from dist/`);
+      const target =
+        required.startsWith(`${app.root}/`) || app.root === '.'
+          ? path.join(DIST, required)
+          : path.join(DIST, app.root, required);
+      assert.ok(await exists(target), `${app.id}: ${required} missing from dist/`);
     }
   }
 
