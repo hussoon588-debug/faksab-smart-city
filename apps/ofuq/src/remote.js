@@ -150,6 +150,14 @@ export function createSupabaseBackend({
 
   return {
     mode: 'supabase',
+    /** Host only — the key never leaves the client, and the screen never prints it. */
+    get endpoint() {
+      try {
+        return new URL(url).host;
+      } catch {
+        return '';
+      }
+    },
     get signedIn() {
       return Boolean(session?.access_token);
     },

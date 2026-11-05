@@ -118,6 +118,21 @@ owner. Ownership never changes hands, so nobody loses a building they paid for.
 A lease is private: `ofuq_leases` is readable only by its two players, while the *listing* lives
 on the public market board like any other offer.
 
+
+## Readiness & exports (v0.8.0)
+
+Two things a player should never have to take on faith:
+
+- **جاهزية المدينة المشتركة** (settings sheet): six measured items — endpoint configured,
+  session open, schema answering, snapshot fresh, ledger reconciling, no recent error. Every
+  green tick comes from a fact the app holds, and «افحص الاتصال الآن» performs a real round trip
+  to `ofuq_snapshot`, which is the only honest way to prove the schema is deployed. Each red item
+  carries the exact next step (which keys to add, which file to run). In local mode the button is
+  disabled instead of pretending to check something that does not exist.
+- **تصدير الحركات CSV**: the wallet's ledger as a file — same rows, same order, Arabic headers,
+  a BOM so Excel reads them, RFC-style quoting for commas and quotes, ISO timestamps. It is a copy
+  of the ledger, never a summary of it, so an exported file always reconciles with the balance.
+
 ## The ledger
 
 Money is not a number that changes; it is the sum of movements. Every action that touches the

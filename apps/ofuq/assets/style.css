@@ -597,3 +597,13 @@ body::after {
 .lease-catch { display: flex; gap: 8px; align-items: center; justify-content: space-between; padding: 9px 10px; border: 1px solid rgba(51, 224, 140, 0.28); border-radius: 13px; background: rgba(51, 224, 140, 0.06); }
 .lease-catch b { font-size: 12px; }
 .lease-catch small { display: block; font-size: 10px; color: var(--muted); }
+
+/* ------------------------------------------------------- readiness & export --- */
+.health { display: grid; gap: 6px; margin: 10px 0; }
+.health-row { display: grid; grid-template-columns: 18px 1fr; gap: 8px; align-items: start; font-size: 11px; }
+.health-row i { font-style: normal; font-size: 11px; line-height: 1.5; }
+.health-row.is-ok i { color: var(--green); }
+.health-row.is-todo i { color: var(--gold-2); }
+.health-row b { display: block; font-size: 11.5px; font-weight: 700; }
+.health-row small { display: block; font-size: 10px; color: var(--muted); margin-top: 2px; }
+.health-row.is-ok small { color: rgba(126, 232, 255, 0.45); }

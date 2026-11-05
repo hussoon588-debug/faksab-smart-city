@@ -184,7 +184,10 @@
         <div class="chip-row" id="ledgerFilters" role="group" aria-label="تصفية الحركات"></div>
         <div class="ledger" id="ledgerList"></div>
         <p class="empty" id="ledgerEmpty" hidden>لا توجد حركات بعد.</p>
-        <p class="fineprint">كل حركة في هذا السجل تحمل سببها والرصيد بعدها — مجموعها يفسّر رصيدك بالكامل.</p>
+        <div class="row gap">
+          <button class="btn btn-ghost sm" type="button" id="exportCsv">تصدير الحركات CSV</button>
+        </div>
+        <p class="fineprint">كل حركة في هذا السجل تحمل سببها والرصيد بعدها — مجموعها يفسّر رصيدك بالكامل. التصدير ينسخ نفس السطور بلا إضافات.</p>
       </div>
     </section>
 
@@ -291,6 +294,13 @@
           <button class="btn btn-ghost sm" type="button" id="authSignOut">خروج</button>
         </span>
       </div>
+    </section>
+    <section class="account" aria-labelledby="healthTitle">
+      <h3 id="healthTitle">جاهزية المدينة المشتركة</h3>
+      <p class="meta" id="healthState">—</p>
+      <div class="health" id="healthList"></div>
+      <button class="btn btn-ghost sm" type="button" id="healthCheck">افحص الاتصال الآن</button>
+      <p class="fineprint">كل بند هنا نتيجة قياس فعلي، لا تقدير: الفحص يقوم برحلة ذهاب وعودة حقيقية إلى الخادم.</p>
     </section>
     <div class="row">
       <span>الاهتزاز عند التفاعل</span>

@@ -665,3 +665,94 @@ export function leaseListingSummary(offers = [], now = Date.now()) {
     cheapest: live.reduce((best, offer) => (best === null || offer.fee < best ? offer.fee : best), null)
   };
 }
+
+/* ------------------------------------------------------------ data & health --- */
+
+const csvCell = (value) => {
+  const text = String(value ?? '');
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+};
+
+/**
+ * The player's ledger as CSV — the same rows the screen shows, nothing added.
+ * A BOM goes first so Excel opens Arabic headers instead of mojibake.
+ */
+export function buildLedgerCsv(entries = [], { withBom = true } = {}) {
+  const rows = [
+    ['التاريخ', 'السبب', 'البيان', 'المبلغ', 'الرصيد بعد', 'المرجع'],
+    ...(Array.isArray(entries) ? entries : []).map((entry) => [
+      Number(entry?.ts) ? new Date(entry.ts).toISOString() : '',
+      entry?.reason ?? '',
+      ledgerLabel(entry?.reason),
+      Number(entry?.amount ?? 0),
+      Number.isFinite(Number(entry?.balanceAfter)) ? Number(entry.balanceAfter) : '',
+      entry?.ref ?? ''
+    ])
+  ];
+  const body = rows.map((row) => row.map(csvCell).join(',')).join('\r\n');
+  return `${withBom ? '\ufeff' : ''}${body}\r\n`;
+}
+
+/**
+ * What the player can actually verify about the shared city, and what to do next.
+ * Nothing here is guessed: every 'ok' comes from a fact the app already holds, and the
+ * round-trip check is the only way to prove the schema is really deployed.
+ */
+export function serverReadiness(facts = {}, now = Date.now()) {
+  const {
+    mode = 'local',
+    hasEndpoint = false,
+    signedIn = false,
+    syncedAt = 0,
+    lastError = null,
+    reconciles = true,
+    roundTripMs = null
+  } = facts;
+
+  const items = [
+    {
+      id: 'endpoint',
+      label: 'عنوان الخادم مضبوط',
+      ok: mode === 'supabase' && hasEndpoint,
+      hint: 'أضف SUPABASE_URL و SUPABASE_ANON_KEY في config/apps.json (أو ملف .env) ثم أعد البناء.'
+    },
+    {
+      id: 'session',
+      label: 'جلسة لاعب مفتوحة',
+      ok: signedIn,
+      hint: 'سجّل الدخول من بطاقة الحساب أعلاه — السوق والإيجار يحتاجان حساباً حقيقياً.'
+    },
+    {
+      id: 'schema',
+      label: 'المخطط يستجيب على الخادم',
+      ok: roundTripMs !== null && roundTripMs >= 0,
+      hint: 'شغّل supabase/ofuq/schema.sql في محرّر SQL ثم اضغط «افحص الآن».'
+    },
+    {
+      id: 'sync',
+      label: 'الرصيد والملكية من الخادم',
+      ok: Boolean(syncedAt) && now - syncedAt < 15 * 60 * 1000,
+      hint: 'اضغط «مزامنة» — اللعبة تعرض آخر لقطة وصلت من الخادم.'
+    },
+    {
+      id: 'ledger',
+      label: 'الدفتر يطابق الرصيد',
+      ok: reconciles,
+      hint: 'تحقق من سجل الحركات: مجموع البنود يجب أن يفسّر الرصيد بالكامل.'
+    },
+    {
+      id: 'errors',
+      label: 'لا أخطاء حديثة',
+      ok: !lastError,
+      hint: lastError ? `آخر خطأ: ${lastError}` : 'ستظهر هنا أي مشكلة يتعذر إخفاؤها.'
+    }
+  ];
+
+  return {
+    items,
+    ready: items.every((item) => item.ok),
+    done: items.filter((item) => item.ok).length,
+    total: items.length,
+    roundTripMs
+  };
+}

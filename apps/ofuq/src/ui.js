@@ -9,6 +9,7 @@ import { APP, ASSET_TYPES, DISTRICTS, ECONOMY } from './config.js';
 import {
   achievementBoard,
   assetFor,
+  buildLedgerCsv,
   challengeBoard,
   counted,
   districtFor,
@@ -27,6 +28,7 @@ import {
   leaseListings,
   marketFee,
   marketSummary,
+  serverReadiness,
   offerForPlot,
   offerProceeds,
   offerRemainingMs,
@@ -132,6 +134,7 @@ export function mount(store) {
     renderCityMap(snap);
     renderPortfolio(snap);
     renderLedger(snap);
+    renderHealth(snap);
     renderMarket(snap);
     renderMyLeases(snap);
     renderReport(snap);
@@ -823,6 +826,68 @@ export function mount(store) {
     return `<div class="sheet-history"><h3>سجل هذه القطعة</h3><ul>${rows}</ul></div>`;
   }
 
+  /* ------------------------------------------------------------ readiness --- */
+
+  function renderHealth(snap) {
+    const list = $('healthList');
+    if (!list) return;
+    const { state } = snap;
+    const health = store.health ?? { lastSyncAt: 0, lastError: null, roundTripMs: null };
+    const report = serverReadiness(
+      {
+        mode: store.mode,
+        hasEndpoint: Boolean(store.remote?.endpoint),
+        signedIn: Boolean(store.auth?.signedIn),
+        syncedAt: health.lastSyncAt,
+        lastError: health.lastError,
+        reconciles: ledgerReconciles(state.ledger ?? [], state.cash),
+        roundTripMs: health.roundTripMs
+      },
+      store.now
+    );
+
+    $('healthState').textContent =
+      store.mode === 'local'
+        ? `الوضع الحالي: محلي على هذا الجهاز — ${report.done} / ${report.total} بند جاهز للخادم.`
+        : `الخادم: ${store.remote?.endpoint ?? '—'} · ${report.done} / ${report.total} بند جاهز${
+            health.roundTripMs !== null ? ` · ${health.roundTripMs}ms` : ''
+          }.`;
+
+    list.innerHTML = report.items
+      .map(
+        (item) => `<div class="health-row ${item.ok ? 'is-ok' : 'is-todo'}">
+          <i aria-hidden="true">${item.ok ? '✓' : '•'}</i>
+          <span><b>${escapeHtml(item.label)}</b>${item.ok ? '' : `<small>${escapeHtml(item.hint)}</small>`}</span>
+        </div>`
+      )
+      .join('');
+    const check = $('healthCheck');
+    if (check) check.disabled = store.mode === 'local';
+  }
+
+  /** The CSV is the ledger, not a report about it: same rows, same order. */
+  function exportLedgerCsv() {
+    const state = store.state;
+    const csv = buildLedgerCsv(state.ledger ?? []);
+    const name = `ofuq-ledger-${new Date(store.now).toISOString().slice(0, 10)}.csv`;
+    try {
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = name;
+      link.rel = 'noopener';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      const rows = Math.max(0, (state.ledger ?? []).length);
+      toast(`تم تصدير ${formatNumber(rows)} حركة إلى ${name}.`);
+    } catch {
+      toast('تعذر إنشاء الملف على هذا المتصفح.');
+    }
+  }
+
   /* -------------------------------------------------------------- insights --- */
 
   const signedPct = (value) => (value === null ? null : `${value > 0 ? '+' : ''}${value}%`);
@@ -1175,7 +1240,7 @@ export function mount(store) {
   }
 
   document.addEventListener('click', (event) => {
-    const target = event.target.closest('[data-view],[data-district],[data-plot],[data-claim],[data-action],[data-filter],[data-ledger],#collectAll,#settingsBtn,#sheetClose,#settingsClose,#saveName,#hapticsToggle,#resetGame,#scrim');
+    const target = event.target.closest('[data-view],[data-district],[data-plot],[data-claim],[data-action],[data-filter],[data-ledger],#collectAll,#settingsBtn,#sheetClose,#settingsClose,#saveName,#hapticsToggle,#resetGame,#scrim,#exportCsv,#healthCheck');
     if (!target) return;
 
     if (target.dataset.view) return switchView(target.dataset.view);
@@ -1247,6 +1312,21 @@ export function mount(store) {
     }
 
     if (target.id === 'hapticsToggle') return act(store.dispatch('toggleHaptics'));
+    if (target.id === 'exportCsv') return exportLedgerCsv();
+    if (target.id === 'healthCheck') {
+      const button = target;
+      button.disabled = true;
+      button.textContent = 'جارٍ الفحص…';
+      return act(
+        store.checkServer().then((result) => {
+          button.textContent = 'افحص الاتصال الآن';
+          render();
+          return result.ok
+            ? { ok: true, message: `الخادم يرد في ${store.health.roundTripMs ?? 0}ms — المخطط يعمل.` }
+            : result;
+        })
+      );
+    }
 
     if (target.id === 'resetGame') {
       if (!resetArmed) {

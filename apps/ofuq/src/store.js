@@ -176,6 +176,11 @@ export function createStore({ storage = browserStorage(), now = () => Date.now()
   const listeners = new Set();
   let state;
   let ephemeral = Boolean(storage.ephemeral);
+  // Health facts the UI can show without guessing: when the last snapshot arrived, and
+  // the last failure we did not swallow.
+  let lastSyncAt = 0;
+  let lastError = null;
+  let roundTripMs = null;
 
   try {
     const raw = storage.read();
@@ -413,6 +418,8 @@ export function createStore({ storage = browserStorage(), now = () => Date.now()
     const next = snapshotToState(snapshot, state);
     if (!next) return false;
     state = next;
+    lastSyncAt = now();
+    lastError = null;
     emit();
     return true;
   }
@@ -651,10 +658,17 @@ export function createStore({ storage = browserStorage(), now = () => Date.now()
 
   async function syncFromServer() {
     if (!remote?.snapshot) return { ok: false, message: 'لا يوجد خادم مُهيّأ.' };
+    const startedAt = now();
     const result = await remote.snapshot();
-    if (!result.ok) return result;
+    if (!result.ok) {
+      lastError = result.message || 'تعذر الوصول إلى الخادم.';
+      roundTripMs = null;
+      emit();
+      return result;
+    }
+    roundTripMs = Math.max(0, now() - startedAt);
     applySnapshot(result.snapshot);
-    return { ok: true, message: 'تمت مزامنة المدينة.' };
+    return { ok: true, message: 'تمت مزامنة المدينة.', roundTrip: roundTripMs };
   }
 
   rollWeek();
@@ -671,6 +685,14 @@ export function createStore({ storage = browserStorage(), now = () => Date.now()
     /** The store clock — the UI reads time from here so tests and leases agree. */
     get now() {
       return now();
+    },
+    /** Health facts for the readiness card: never inferred, always observed. */
+    get health() {
+      return { lastSyncAt, lastError, roundTripMs };
+    },
+    /** Prove the server path end to end: one real round trip to `ofuq_snapshot`. */
+    async checkServer() {
+      return syncFromServer();
     },
     /** 'local' (offline shell) or 'supabase' (server owns balance + ownership). */
     get mode() {
