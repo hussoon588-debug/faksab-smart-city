@@ -1,0 +1,30 @@
+{
+  "name": "ofuq-production-foundation",
+  "version": "0.4.0",
+  "private": true,
+  "type": "module",
+  "description": "OFUQ (أفق) production foundation: build, audit and test tooling for the FAKSAB and OFUQ static web apps.",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "dev": "node tools/dev-server.mjs",
+    "dev:ofuq": "SERVE_ROOT=apps/ofuq node tools/dev-server.mjs",
+    "build": "node tools/build.mjs",
+    "check": "node tools/check.mjs",
+    "check:strict": "node tools/check.mjs --strict",
+    "test": "node --test \"tests/**/*.test.mjs\"",
+    "verify": "npm run check && npm test && npm run build",
+    "clean": "node -e \"import('node:fs').then(fs=>fs.rmSync('dist',{recursive:true,force:true}))\""
+  },
+  "keywords": [
+    "ofuq",
+    "faksab",
+    "pwa",
+    "static-site"
+  ],
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "jsdom": "^31.0.0"
+  }
+}

@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#050d1f">
+<meta name="color-scheme" content="dark">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="description" content="أفق · OFUQ — منصة استثمار حضري: اشترِ قطعاً، طوّر أصولاً، وحصّل الإيجارات في مدينة تنمو معك.">
+<title>أفق · OFUQ — استثمار حضري</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<a class="skip-link" href="#main">تخطَّ إلى المحتوى</a>
+
+<div class="app" id="app">
+  <header class="topbar">
+    <div class="brand">
+      <img class="brand-mark" src="assets/icon-192.png" width="40" height="40" alt="" decoding="async">
+      <span class="brand-text">
+        <b class="brand-ar">أفق</b>
+        <span class="brand-en">OFUQ</span>
+      </span>
+    </div>
+    <button class="icon-btn" id="settingsBtn" type="button" aria-label="الإعدادات">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"/></svg>
+    </button>
+  </header>
+
+  <section class="hero" aria-labelledby="heroTitle">
+    <p class="hero-eyebrow">منصة استثمار حضري</p>
+    <h1 class="hero-title" id="heroTitle">محفظتك في مدينة أفق</h1>
+    <div class="hero-stats">
+      <div class="hstat"><b id="netWorth">—</b><span>صافي الثروة</span></div>
+      <div class="hstat"><b id="cash">—</b><span>السيولة</span></div>
+      <div class="hstat"><b id="income">—</b><span>دخل / ساعة</span></div>
+    </div>
+    <div class="hero-actions">
+      <button class="btn btn-gold" id="collectAll" type="button">تحصيل كل الإيجارات</button>
+      <p class="hero-hint" id="collectHint">—</p>
+    </div>
+  </section>
+
+  <section class="level" aria-label="تقدم المستوى">
+    <div class="level-head">
+      <span class="level-badge"><b id="levelNum">1</b></span>
+      <span class="level-name" id="levelName">مستثمر جديد</span>
+      <span class="level-next" id="levelNext">—</span>
+    </div>
+    <div class="level-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="levelBar">
+      <i></i>
+    </div>
+  </section>
+
+  <nav class="tabs" role="tablist" aria-label="أقسام التطبيق">
+    <button class="tab is-active" type="button" role="tab" aria-selected="true" aria-controls="view-city" data-view="city">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9l6-4v16M9 21V3l6 4v14M15 21v-8l6-3v11"/></svg>
+      <span>المدينة</span>
+    </button>
+    <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="view-portfolio" data-view="portfolio">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+      <span>المحفظة</span>
+    </button>
+    <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="view-league" data-view="league">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 01-10 0z"/><path d="M17 5h3v2a3 3 0 01-3 3M7 5H4v2a3 3 0 003 3"/></svg>
+      <span>الدوري</span>
+    </button>
+  </nav>
+
+  <main id="main">
+    <section class="view is-active" id="view-city" role="tabpanel" aria-label="المدينة">
+      <div class="card city-card">
+        <div class="card-head">
+          <h2>المدينة</h2>
+          <span class="pill" id="cityMode">—</span>
+        </div>
+        <div class="city-stage" id="cityStage">
+          <canvas id="cityCanvas" aria-hidden="true"></canvas>
+          <div class="city-hud">
+            <div class="city-search">
+              <input id="citySearch" type="search" inputmode="search" autocomplete="off"
+                placeholder="ابحث: OF-014 أو حي الميناء" aria-label="ابحث عن قطعة أو حي" />
+            </div>
+            <div class="city-zoom" role="group" aria-label="تكبير الخريطة">
+              <button type="button" data-action="zoom-in" aria-label="تكبير">+</button>
+              <button type="button" data-action="zoom-out" aria-label="تصغير">−</button>
+              <button type="button" data-action="zoom-reset" aria-label="إعادة ضبط العرض">⟲</button>
+            </div>
+            <canvas id="cityMinimap" width="180" height="96" aria-hidden="true"></canvas>
+          </div>
+          <p class="city-fallback" id="cityFallback" hidden>
+            العرض ثلاثي الأبعاد غير متاح على هذا المتصفح — استخدم شبكة القطع أسفل البطاقة.
+          </p>
+        </div>
+        <div class="city-filters" id="cityFilters" role="group" aria-label="مرشّح القطع"></div>
+        <p class="city-hint" id="cityHint">اسحب للتنقل · قرّب بإصبعين أو بعجلة الفأرة · اضغط قطعة لعرضها</p>
+        <p class="legend">
+          <span><i class="dot dot-free"></i> متاحة</span>
+          <span><i class="dot dot-owned"></i> قطعة لك</span>
+          <span><i class="dot dot-built"></i> أصل مُطوّر</span>
+          <span><i class="dot dot-ready"></i> إيجار جاهز</span>
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>أحياء المدينة</h2>
+          <span class="pill" id="citySummary">—</span>
+        </div>
+        <div class="chips" id="districtTabs" role="tablist" aria-label="الأحياء"></div>
+        <p class="meta" id="districtMeta">—</p>
+        <div class="grid" id="plotGrid"></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-portfolio" role="tabpanel" aria-label="المحفظة" hidden>
+      <div class="card">
+        <div class="card-head"><h2>ملخص المحفظة</h2></div>
+        <div class="kpis">
+          <div class="kpi"><b id="pfValue">—</b><span>قيمة الأصول</span></div>
+          <div class="kpi"><b id="pfIncome">—</b><span>دخل / ساعة</span></div>
+          <div class="kpi"><b id="pfYield">—</b><span>عائد سنوي</span></div>
+          <div class="kpi"><b id="pfCount">—</b><span>عدد القطع</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>الأصول</h2></div>
+        <div class="assets" id="assetList"></div>
+        <p class="empty" id="emptyPortfolio" hidden>لا توجد أصول بعد. ابدأ بشراء قطعة من تبويب المدينة.</p>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <h2>سجل الحركات</h2>
+          <span class="pill" id="ledgerState">—</span>
+        </div>
+        <div class="chip-row" id="ledgerFilters" role="group" aria-label="تصفية الحركات"></div>
+        <div class="ledger" id="ledgerList"></div>
+        <p class="empty" id="ledgerEmpty" hidden>لا توجد حركات بعد.</p>
+        <p class="fineprint">كل حركة في هذا السجل تحمل سببها والرصيد بعدها — مجموعها يفسّر رصيدك بالكامل.</p>
+      </div>
+    </section>
+
+    <section class="view" id="view-league" role="tabpanel" aria-label="الدوري" hidden>
+      <div class="card league-card">
+        <div class="league-head">
+          <div>
+            <p class="hero-eyebrow">الدوري الأسبوعي</p>
+            <b class="league-rank" id="rankBadge">#—</b>
+          </div>
+          <div class="league-side">
+            <b id="scoreValue">—</b>
+            <span>نقطة</span>
+            <small id="weekLeft">—</small>
+          </div>
+        </div>
+        <div class="challenges" id="challengeList"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>الترتيب</h2></div>
+        <div class="board" id="leaderboard"></div>
+      </div>
+    </section>
+  </main>
+
+  <p class="disclaimer">
+    الملكية هنا <b>افتراضية داخل اللعبة</b> — لا تمثل عقاراً حقيقياً، ولا يمكن تحويل الرصيد إلى مال.
+  </p>
+
+  <footer class="footer">
+    <span id="versionLabel">—</span>
+    <span class="dot-sep" aria-hidden="true">•</span>
+    <span id="modeLabel">وضع محلي</span>
+    <span id="storageWarn" class="warn" hidden>الحفظ المحلي غير متاح</span>
+  </footer>
+</div>
+
+<div class="scrim" id="scrim" hidden></div>
+
+<section class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" hidden>
+  <div class="sheet-head">
+    <h2 id="sheetTitle">القطعة</h2>
+    <button class="icon-btn" type="button" id="sheetClose" aria-label="إغلاق">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+  <div class="sheet-body" id="sheetBody"></div>
+</section>
+
+<section class="sheet" id="settings" role="dialog" aria-modal="true" aria-labelledby="settingsTitle" hidden>
+  <div class="sheet-head">
+    <h2 id="settingsTitle">الإعدادات</h2>
+    <button class="icon-btn" type="button" id="settingsClose" aria-label="إغلاق">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+  <div class="sheet-body">
+    <label class="field">
+      <span>اسم المستثمر</span>
+      <input id="playerName" type="text" maxlength="24" autocomplete="nickname" enterkeyhint="done">
+    </label>
+    <button class="btn btn-ghost" type="button" id="saveName">حفظ الاسم</button>
+    <section class="account" aria-labelledby="accountTitle">
+      <h3 id="accountTitle">الحساب والمدينة المشتركة</h3>
+      <p class="meta" id="accountState">—</p>
+      <form id="authForm" novalidate hidden>
+        <label class="field">
+          <span>البريد الإلكتروني</span>
+          <input id="authEmail" type="email" inputmode="email" autocomplete="email" dir="ltr" required>
+        </label>
+        <label class="field">
+          <span>كلمة المرور (٦ أحرف على الأقل)</span>
+          <input id="authPassword" type="password" autocomplete="current-password" minlength="6" dir="ltr" required>
+        </label>
+        <div class="row gap">
+          <button class="btn btn-ghost" type="submit" id="authSignIn">تسجيل الدخول</button>
+          <button class="btn btn-ghost" type="button" id="authSignUp">إنشاء حساب</button>
+        </div>
+      </form>
+      <div class="row" id="accountSession" hidden>
+        <span id="accountEmail" dir="ltr">—</span>
+        <span class="row-actions">
+          <button class="btn btn-ghost sm" type="button" id="authSync">مزامنة</button>
+          <button class="btn btn-ghost sm" type="button" id="authSignOut">خروج</button>
+        </span>
+      </div>
+    </section>
+    <div class="row">
+      <span>الاهتزاز عند التفاعل</span>
+      <button class="btn btn-ghost sm" type="button" id="hapticsToggle" aria-pressed="true">مفعّل</button>
+    </div>
+    <div class="row">
+      <span>حالة المزامنة</span>
+      <span class="pill" id="syncState">محلي على هذا الجهاز</span>
+    </div>
+    <button class="btn btn-danger" type="button" id="resetGame">حذف التقدم والبدء من جديد</button>
+    <p class="fineprint">أفق · OFUQ نسخة <span id="settingsVersion">0.1.0</span> — عملة داخلية للعبة فقط، وليست استثماراً مالياً حقيقياً.</p>
+  </div>
+</section>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

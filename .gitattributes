@@ -1,0 +1,11 @@
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.apk binary
+*.woff2 binary
+*.idsig binary
+
+# The game bundles are vendor drops: keep them out of language stats and diffs.
+vendor/** linguist-vendored
+vendor/** -diff
