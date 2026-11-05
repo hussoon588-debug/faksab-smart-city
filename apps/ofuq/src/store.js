@@ -19,6 +19,8 @@ import {
   plotValue,
   saleProceeds,
   upgradeCost,
+  validateLeaseFee,
+  validateLeaseHours,
   validatePlayerName,
   weekKey
 } from './core.js';
@@ -35,6 +37,10 @@ export function createInitialState(now = Date.now()) {
     xp: 0,
     plots: {},
     claims: {},
+    // The board is server-owned; locally it is always empty (no simulated sellers).
+    offers: [],
+    // Active leases are server-owned too: renting needs two real accounts.
+    leases: [],
     // Append-only in spirit: newest first, capped, and every row explains one balance move.
     ledger: [
       {
@@ -67,6 +73,9 @@ export function migrate(raw, now = Date.now()) {
     xp: Math.max(0, num(raw.xp, 0)),
     plots: {},
     claims: {},
+    // The board is server-owned; locally it is always empty (no simulated sellers).
+    offers: [],
+    leases: [],
     week: { ...base.week, ...(typeof raw.week === 'object' && raw.week ? raw.week : {}) },
     stats: { ...base.stats, ...(typeof raw.stats === 'object' && raw.stats ? raw.stats : {}) },
     settings: { ...base.settings, ...(typeof raw.settings === 'object' && raw.settings ? raw.settings : {}) }
@@ -167,6 +176,11 @@ export function createStore({ storage = browserStorage(), now = () => Date.now()
   const listeners = new Set();
   let state;
   let ephemeral = Boolean(storage.ephemeral);
+  // Health facts the UI can show without guessing: when the last snapshot arrived, and
+  // the last failure we did not swallow.
+  let lastSyncAt = 0;
+  let lastError = null;
+  let roundTripMs = null;
 
   try {
     const raw = storage.read();
@@ -404,9 +418,13 @@ export function createStore({ storage = browserStorage(), now = () => Date.now()
     const next = snapshotToState(snapshot, state);
     if (!next) return false;
     state = next;
+    lastSyncAt = now();
+    lastError = null;
     emit();
     return true;
   }
+
+  const MARKET_LOCAL = { ok: false, message: 'السوق بين اللاعبين يحتاج جلسة خادم — سجّل الدخول أولاً.' };
 
   const localHandlers = {
     buy: ({ districtId, plotNo }) => actions.buy(districtId, plotNo),
@@ -416,6 +434,12 @@ export function createStore({ storage = browserStorage(), now = () => Date.now()
     collectAll: () => actions.collectAll(),
     sell: ({ plotKey: key }) => actions.sell(key),
     claim: ({ challengeId }) => actions.claim(challengeId),
+    listOffer: () => MARKET_LOCAL,
+    cancelOffer: () => MARKET_LOCAL,
+    acceptOffer: () => MARKET_LOCAL,
+    listLease: () => MARKET_LOCAL,
+    acceptLease: () => MARKET_LOCAL,
+    collectLease: () => MARKET_LOCAL,
     setName: ({ name }) => actions.setName(name),
     toggleHaptics: () => actions.toggleHaptics(),
     reset: () => actions.reset()
@@ -475,6 +499,68 @@ export function createStore({ storage = browserStorage(), now = () => Date.now()
           if (collected === 0) return { ok: false, message: 'لا يوجد إيجار جاهز للتحصيل.' };
           return { ok: true, message: `تم تحصيل ${(state.cash - before).toLocaleString(APP.numberLocale)} عملة.` };
         }
+        case 'listOffer': {
+          const plot = plotFor();
+          if (!plot?.id) return { ok: false, message: 'هذه القطعة غير مسجّلة على الخادم بعد.' };
+          if (!plot.assetId) return { ok: false, message: 'طوّر القطعة قبل عرضها للبيع.' };
+          const price = Math.round(Number(payload.price));
+          if (!Number.isFinite(price) || price < ECONOMY.market.minPrice) {
+            return { ok: false, message: `أقل سعر مسموح ${ECONOMY.market.minPrice} عملة.` };
+          }
+          result = await remote.listOffer({
+            plotId: plot.id,
+            price,
+            hours: payload.hours ?? ECONOMY.market.defaultHours,
+            idempotencyKey: payload.idempotencyKey ?? createIdempotencyKey('list')
+          });
+          break;
+        }
+        case 'cancelOffer':
+          result = await remote.cancelOffer({
+            offerId: payload.offerId,
+            idempotencyKey: payload.idempotencyKey ?? createIdempotencyKey('cancel')
+          });
+          break;
+        case 'acceptOffer':
+          result = await remote.acceptOffer({
+            offerId: payload.offerId,
+            idempotencyKey: payload.idempotencyKey ?? createIdempotencyKey('accept')
+          });
+          break;
+        case 'listLease': {
+          const plot = plotFor();
+          if (!plot?.id) return { ok: false, message: 'هذه القطعة غير مسجّلة على الخادم بعد.' };
+          if (!plot.assetId) return { ok: false, message: 'طوّر القطعة قبل تأجيرها.' };
+          if (state.leases?.some((lease) => lease.plotId === plot.id && lease.endsAt > Date.now())) {
+            return { ok: false, message: 'هذه القطعة مؤجَّرة بالفعل — انتظر انتهاء الإيجار.' };
+          }
+          const fee = Math.round(Number(payload.fee));
+          const feeCheck = validateLeaseFee(fee);
+          if (!feeCheck.ok) return { ok: false, message: feeCheck.error };
+          const hoursCheck = validateLeaseHours(payload.hours);
+          if (!hoursCheck.ok) return { ok: false, message: hoursCheck.error };
+          result = await remote.listLease({
+            plotId: plot.id,
+            fee: feeCheck.fee,
+            hours: hoursCheck.hours,
+            windowHours: payload.windowHours ?? ECONOMY.lease.windowHours,
+            idempotencyKey: payload.idempotencyKey ?? createIdempotencyKey('lease')
+          });
+          break;
+        }
+        case 'acceptLease':
+          result = await remote.acceptLease({
+            offerId: payload.offerId,
+            idempotencyKey: payload.idempotencyKey ?? createIdempotencyKey('lease-accept')
+          });
+          break;
+        case 'collectLease':
+          if (!payload.plotId) return { ok: false, message: 'عقد الإيجار غير معروف.' };
+          result = await remote.collectRent({
+            plotId: payload.plotId,
+            idempotencyKey: payload.idempotencyKey ?? createIdempotencyKey('lease-collect')
+          });
+          break;
         case 'claim':
           result = await remote.claimMission({
             missionId: payload.challengeId,
@@ -498,7 +584,13 @@ export function createStore({ storage = browserStorage(), now = () => Date.now()
         upgrade: 'تمت الترقية.',
         collect: `تم تحصيل ${gained.toLocaleString(APP.numberLocale)} عملة.`,
         sell: `تم البيع بـ ${gained.toLocaleString(APP.numberLocale)} عملة.`,
-        claim: `تم استلام مكافأة التحدي (${gained.toLocaleString(APP.numberLocale)} عملة).`
+        claim: `تم استلام مكافأة التحدي (${gained.toLocaleString(APP.numberLocale)} عملة).`,
+        listOffer: 'تم نشر العرض — أي لاعب في المدينة يمكنه قبوله الآن.',
+        cancelOffer: 'تم إلغاء العرض وعادت القطعة إلى محفظتك.',
+        acceptOffer: `تم شراء القطعة من لاعب آخر (−${Math.abs(gained).toLocaleString(APP.numberLocale)} عملة).`,
+        listLease: 'تم نشر عرض الإيجار — يستطيع أي لاعب استئجار دخل الأصل.',
+        acceptLease: `تم استئجار الأصل (−${Math.abs(gained).toLocaleString(APP.numberLocale)} عملة) — اجمعه قبل انتهاء المدة.`,
+        collectLease: `تم تحصيل إيجار الأصل المستأجر (${gained.toLocaleString(APP.numberLocale)} عملة).`
       };
       return { ok: true, message: messages[type] ?? 'تم التنفيذ.' };
     } catch (error) {
@@ -566,10 +658,17 @@ export function createStore({ storage = browserStorage(), now = () => Date.now()
 
   async function syncFromServer() {
     if (!remote?.snapshot) return { ok: false, message: 'لا يوجد خادم مُهيّأ.' };
+    const startedAt = now();
     const result = await remote.snapshot();
-    if (!result.ok) return result;
+    if (!result.ok) {
+      lastError = result.message || 'تعذر الوصول إلى الخادم.';
+      roundTripMs = null;
+      emit();
+      return result;
+    }
+    roundTripMs = Math.max(0, now() - startedAt);
     applySnapshot(result.snapshot);
-    return { ok: true, message: 'تمت مزامنة المدينة.' };
+    return { ok: true, message: 'تمت مزامنة المدينة.', roundTrip: roundTripMs };
   }
 
   rollWeek();
@@ -582,6 +681,18 @@ export function createStore({ storage = browserStorage(), now = () => Date.now()
     },
     get ephemeral() {
       return ephemeral;
+    },
+    /** The store clock — the UI reads time from here so tests and leases agree. */
+    get now() {
+      return now();
+    },
+    /** Health facts for the readiness card: never inferred, always observed. */
+    get health() {
+      return { lastSyncAt, lastError, roundTripMs };
+    },
+    /** Prove the server path end to end: one real round trip to `ofuq_snapshot`. */
+    async checkServer() {
+      return syncFromServer();
     },
     /** 'local' (offline shell) or 'supabase' (server owns balance + ownership). */
     get mode() {

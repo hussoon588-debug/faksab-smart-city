@@ -30,11 +30,15 @@ function createFakeSupabase({ clock = { now: Date.UTC(2026, 10, 5, 9) } } = {}) 
   const tokens = new Map(); // token -> email
   const accounts = new Map(); // email -> { balance, xp, plots, claims, ledger:Set (idempotency), rows:[] (money) }
   const plots = new Map(); // key -> { id, districtId, plotNo, owner, assetId, level, lastCollectedAt }
+  const offers = new Map(); // id -> { id, kind, plotId, sellerId, price|fee, hours, createdAt, expiresAt, status, buyerId }
+  const leases = new Map(); // id -> { id, offerId, plotId, lessorId, lesseeId, fee, startsAt, endsAt }
   let calls = 0;
+  let offerSeq = 0;
+  let leaseSeq = 0;
 
   const accountFor = (email) => {
     if (!accounts.has(email)) {
-      accounts.set(email, { balance: 12000, xp: 0, plots: new Set(), claims: new Set(), ledger: new Set(), rows: [] });
+      accounts.set(email, { balance: 12000, xp: 0, plots: new Set(), claims: new Set(), ledger: new Set(), requests: new Set(), rows: [] });
     }
     return accounts.get(email);
   };
@@ -53,6 +57,102 @@ function createFakeSupabase({ clock = { now: Date.UTC(2026, 10, 5, 9) } } = {}) 
         lastCollectedAt: null
       });
     }
+  }
+
+  const plotById = (id) => [...plots.values()].find((candidate) => candidate.id === id) ?? null;
+
+  const plotValueOf = (plot) =>
+    plot.assetId
+      ? plot.price + Math.round(ASSETS[plot.assetId].cost * (1 + 0.35 * (plot.level - 1)) * 0.9)
+      : plot.price;
+
+  function expireOffers() {
+    for (const offer of offers.values()) {
+      if (offer.status === 'open' && offer.expiresAt <= clock.now) offer.status = 'expired';
+    }
+  }
+
+  /** The lease currently running on a plot, if any — ownership never moves. */
+  function activeLease(plotId) {
+    return [...leases.values()].find((lease) => lease.plotId === plotId && lease.endsAt > clock.now) ?? null;
+  }
+
+  /** Accrued rent belongs to whoever owns the plot when the lease starts: settle it first. */
+  function settleAccrued(plot) {
+    if (!plot.assetId || plot.owner === null) return 0;
+    const owner = accountFor(plot.owner);
+    const rate = rentOf(plot.assetId, plot.level, DISTRICTS[plot.districtId].tier);
+    const elapsed = (clock.now - (plot.lastCollectedAt ?? clock.now)) / HOUR;
+    const amount = Math.floor(Math.min(Math.max(elapsed, 0), 8) * rate);
+    if (amount <= 0) return 0;
+    owner.balance += amount;
+    rowId += 1;
+    owner.rows.unshift({
+      id: rowId,
+      ts: new Date(clock.now).toISOString(),
+      reason: 'rent',
+      amount,
+      balanceAfter: owner.balance,
+      ref: plot.id
+    });
+    plot.lastCollectedAt = clock.now;
+    return amount;
+  }
+
+  function liveLeases(email) {
+    return [...leases.values()]
+      .filter((lease) => lease.endsAt > clock.now && (lease.lessorId === email || lease.lesseeId === email))
+      .sort((a, b) => b.startsAt - a.startsAt)
+      .map((lease) => {
+        const plot = plotById(lease.plotId);
+        return {
+          id: lease.id,
+          plotId: lease.plotId,
+          districtId: plot.districtId,
+          plotNo: plot.plotNo,
+          assetId: plot.assetId,
+          level: plot.level,
+          rent: plot.assetId ? rentOf(plot.assetId, plot.level, DISTRICTS[plot.districtId].tier) : 0,
+          fee: lease.fee,
+          lessorId: `user-${lease.lessorId}`,
+          lessorName: lease.lessorId.split('@')[0],
+          lesseeId: `user-${lease.lesseeId}`,
+          lesseeName: lease.lesseeId.split('@')[0],
+          startsAt: new Date(lease.startsAt).toISOString(),
+          endsAt: new Date(lease.endsAt).toISOString(),
+          lastCollectedAt: new Date(plot.lastCollectedAt ?? lease.startsAt).toISOString(),
+          tenant: lease.lesseeId === email,
+          owner: lease.lessorId === email
+        };
+      });
+  }
+
+  function liveOffers(email) {
+    expireOffers();
+    return [...offers.values()]
+      .filter((offer) => offer.status === 'open')
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .map((offer) => {
+        const plot = plotById(offer.plotId);
+        return {
+          id: offer.id,
+          plotId: offer.plotId,
+          districtId: plot.districtId,
+          plotNo: plot.plotNo,
+          assetId: plot.assetId,
+          level: plot.level,
+          sellerId: `user-${offer.sellerId}`,
+          sellerName: offer.sellerId.split('@')[0],
+          price: offer.price ?? 0,
+          fee: offer.fee ?? 0,
+          kind: offer.kind,
+          hours: offer.hours ?? null,
+          value: plotValueOf(plot),
+          expiresAt: new Date(offer.expiresAt).toISOString(),
+          createdAt: new Date(offer.createdAt).toISOString(),
+          mine: offer.sellerId === email
+        };
+      });
   }
 
   function snapshot(email) {
@@ -75,6 +175,8 @@ function createFakeSupabase({ clock = { now: Date.UTC(2026, 10, 5, 9) } } = {}) 
       })),
       weekly: { bought: 0, developed: 0, upgraded: 0, collected: 0 },
       claims: [...account.claims],
+      offers: liveOffers(email),
+      leases: liveLeases(email),
       ledger: account.rows.slice(0, 100).map((row, index) => ({ ...row, seq: index }))
     };
   }
@@ -154,7 +256,11 @@ function createFakeSupabase({ clock = { now: Date.UTC(2026, 10, 5, 9) } } = {}) 
     ofuq_collect_rent: (email, { p_plot, p_idempotency }) => {
       const plot = [...plots.values()].find((candidate) => candidate.id === p_plot);
       if (!plot) throw new Error('القطعة غير موجودة');
-      if (plot.owner !== email) throw new Error('هذه القطعة ليست لك');
+      const lease = activeLease(plot.id);
+      const tenant = lease && lease.lesseeId === email;
+      if (plot.owner !== email && !tenant) throw new Error('هذه القطعة ليست لك');
+      // While a lease runs the income belongs to the tenant — the owner already took the fee.
+      if (lease && plot.owner === email) throw new Error('القطعة مؤجَّرة — الإيجار للمستأجر حتى نهاية المدة');
       if (!plot.assetId) throw new Error('لا يوجد أصل على هذه القطعة');
       const account = accountFor(email);
       if (p_idempotency && account.ledger.has(p_idempotency)) return snapshot(email);
@@ -183,6 +289,7 @@ function createFakeSupabase({ clock = { now: Date.UTC(2026, 10, 5, 9) } } = {}) 
       const plot = [...plots.values()].find((candidate) => candidate.id === p_plot);
       if (!plot) throw new Error('القطعة غير موجودة');
       if (plot.owner !== email) throw new Error('هذه القطعة ليست لك');
+      if (activeLease(plot.id)) throw new Error('القطعة مؤجَّرة — انتظر انتهاء الإيجار قبل البيع');
       const account = accountFor(email);
       const build = plot.assetId ? Math.round(ASSETS[plot.assetId].cost * (1 + 0.35 * (plot.level - 1)) * 0.9) : 0;
       const proceeds = Math.round((plot.price + build) * 0.96);
@@ -193,6 +300,170 @@ function createFakeSupabase({ clock = { now: Date.UTC(2026, 10, 5, 9) } } = {}) 
       plot.lastCollectedAt = null;
       account.plots.delete(`${plot.districtId}:${plot.plotNo}`);
       account.xp += 50;
+      return snapshot(email);
+    },
+
+    ofuq_list_offer: (email, { p_plot, p_price, p_hours, p_idempotency }) => {
+      const account = accountFor(email);
+      if (p_idempotency && account.requests.has(p_idempotency)) return snapshot(email);
+      expireOffers();
+      const plot = plotById(p_plot);
+      if (!plot) throw new Error('القطعة غير موجودة');
+      if (plot.owner !== email) throw new Error('هذه القطعة ليست لك');
+      if (!plot.assetId) throw new Error('طوّر القطعة قبل عرضها للبيع');
+      if (activeLease(plot.id)) throw new Error('القطعة مؤجَّرة — انتظر انتهاء الإيجار قبل البيع');
+      const price = Math.round(Number(p_price) || 0);
+      if (price < 100) throw new Error('أقل سعر مسموح 100 عملة');
+      if (price > 100000000) throw new Error('السعر أعلى من الحد المسموح');
+      const hours = Math.min(168, Math.max(1, Math.round(Number(p_hours) || 48)));
+      for (const offer of offers.values()) {
+        if (offer.plotId === p_plot && offer.status === 'open') offer.status = 'cancelled';
+      }
+      offerSeq += 1;
+      const id = `offer-${offerSeq}`;
+      offers.set(id, {
+        id,
+        kind: 'sale',
+        plotId: p_plot,
+        sellerId: email,
+        price,
+        createdAt: clock.now,
+        expiresAt: clock.now + hours * HOUR,
+        status: 'open',
+        buyerId: null
+      });
+      if (p_idempotency) account.requests.add(p_idempotency);
+      return snapshot(email);
+    },
+
+    ofuq_cancel_offer: (email, { p_offer, p_idempotency }) => {
+      const account = accountFor(email);
+      if (p_idempotency && account.requests.has(p_idempotency)) return snapshot(email);
+      const offer = offers.get(p_offer);
+      if (!offer) throw new Error('العرض غير موجود');
+      if (offer.sellerId !== email) throw new Error('هذا العرض ليس لك');
+      expireOffers();
+      if (offer.status !== 'open') throw new Error('العرض لم يعد مفتوحاً');
+      offer.status = 'cancelled';
+      if (p_idempotency) account.requests.add(p_idempotency);
+      return snapshot(email);
+    },
+
+    ofuq_accept_offer: (email, { p_offer, p_idempotency }) => {
+      const buyer = accountFor(email);
+      if (p_idempotency && buyer.requests.has(p_idempotency)) return snapshot(email);
+      expireOffers();
+      const offer = offers.get(p_offer);
+      if (!offer) throw new Error('العرض غير موجود');
+      if (offer.status !== 'open') throw new Error('العرض لم يعد متاحاً');
+      if (offer.kind === 'lease') throw new Error('هذا عرض إيجار — استخدم استئجار الأصل');
+      if (offer.sellerId === email) throw new Error('لا يمكنك قبول عرضك');
+      const plot = plotById(offer.plotId);
+      if (plot.owner !== offer.sellerId) throw new Error('العرض غير صالح — تغيّرت ملكية القطعة');
+
+      const seller = accountFor(offer.sellerId);
+      const key = `${plot.districtId}:${plot.plotNo}`;
+      const fee = Math.round(offer.price * 0.04);
+
+      // Buyer pays in full; the seller is credited and charged as two separate rows.
+      if (spend(buyer, email, p_idempotency && `${p_idempotency}:buy`, -offer.price, 'plot_purchase', key).replayed) {
+        return snapshot(email);
+      }
+      spend(seller, offer.sellerId, null, offer.price, 'sale', key);
+      spend(seller, offer.sellerId, null, -fee, 'market_fee', key);
+
+      plot.owner = email;
+      plot.lastCollectedAt = clock.now;
+      seller.plots.delete(key);
+      buyer.plots.add(key);
+      buyer.xp += 40;
+      seller.xp += 50;
+
+      offer.status = 'accepted';
+      offer.buyerId = email;
+      if (p_idempotency) buyer.requests.add(p_idempotency);
+      return snapshot(email);
+    },
+
+    ofuq_list_lease: (email, { p_plot, p_fee, p_hours, p_window, p_idempotency }) => {
+      const account = accountFor(email);
+      if (p_idempotency && account.requests.has(p_idempotency)) return snapshot(email);
+      expireOffers();
+      const plot = plotById(p_plot);
+      if (!plot) throw new Error('القطعة غير موجودة');
+      if (plot.owner !== email) throw new Error('هذه القطعة ليست لك');
+      if (!plot.assetId) throw new Error('طوّر القطعة قبل تأجيرها');
+      if (activeLease(plot.id)) throw new Error('القطعة مؤجَّرة بالفعل');
+      if ([...offers.values()].some((offer) => offer.plotId === p_plot && offer.status === 'open')) {
+        throw new Error('هذه القطعة معروضة بالفعل — ألغِ العرض أولاً');
+      }
+      const fee = Math.round(Number(p_fee) || 0);
+      if (fee < 100) throw new Error('أقل مبلغ مسموح 100 عملة');
+      if (fee > 100000000) throw new Error('المبلغ أعلى من الحد المسموح');
+      const hours = Math.round(Number(p_hours) || 24);
+      if (hours < 1 || hours > 168) throw new Error('مدة الإيجار بين 1 و168 ساعة');
+      const windowHours = Math.min(168, Math.max(1, Math.round(Number(p_window) || 48)));
+      offerSeq += 1;
+      const id = `offer-${offerSeq}`;
+      offers.set(id, {
+        id,
+        kind: 'lease',
+        plotId: p_plot,
+        sellerId: email,
+        fee,
+        hours,
+        createdAt: clock.now,
+        expiresAt: clock.now + windowHours * HOUR,
+        status: 'open',
+        buyerId: null
+      });
+      if (p_idempotency) account.requests.add(p_idempotency);
+      return snapshot(email);
+    },
+
+    ofuq_accept_lease: (email, { p_offer, p_idempotency }) => {
+      const tenant = accountFor(email);
+      if (p_idempotency && tenant.requests.has(p_idempotency)) return snapshot(email);
+      expireOffers();
+      const offer = offers.get(p_offer);
+      if (!offer) throw new Error('العرض غير موجود');
+      if (offer.kind !== 'lease') throw new Error('هذا عرض بيع — استخدم شراء القطعة');
+      if (offer.status !== 'open') throw new Error('العرض لم يعد متاحاً');
+      if (offer.sellerId === email) throw new Error('لا يمكنك استئجار أصلك');
+      const plot = plotById(offer.plotId);
+      if (plot.owner !== offer.sellerId) throw new Error('العرض غير صالح — تغيّرت ملكية القطعة');
+      if (activeLease(plot.id)) throw new Error('القطعة مؤجَّرة بالفعل');
+
+      const lessor = accountFor(offer.sellerId);
+      const key = `${plot.districtId}:${plot.plotNo}`;
+      const platformFee = Math.round(offer.fee * 0.04);
+
+      // The owner keeps the rent that accrued before the lease: settle it, then hand over.
+      settleAccrued(plot);
+
+      if (spend(tenant, email, p_idempotency && `${p_idempotency}:pay`, -offer.fee, 'lease_payment', key).replayed) {
+        return snapshot(email);
+      }
+      spend(lessor, offer.sellerId, null, offer.fee, 'lease_income', key);
+      spend(lessor, offer.sellerId, null, -platformFee, 'market_fee', key);
+
+      leaseSeq += 1;
+      leases.set(`lease-${leaseSeq}`, {
+        id: `lease-${leaseSeq}`,
+        offerId: offer.id,
+        plotId: plot.id,
+        lessorId: offer.sellerId,
+        lesseeId: email,
+        fee: offer.fee,
+        startsAt: clock.now,
+        endsAt: clock.now + offer.hours * HOUR
+      });
+      plot.lastCollectedAt = clock.now;
+      offer.status = 'accepted';
+      offer.buyerId = email;
+      tenant.xp += 30;
+      lessor.xp += 40;
+      if (p_idempotency) tenant.requests.add(p_idempotency);
       return snapshot(email);
     },
 

@@ -3,7 +3,7 @@
  * Scope-relative: the same file is valid locally (`/apps/ofuq/`) and on GitHub
  * Pages (`/faksab-smart-city/apps/ofuq/`). Bump APP_VERSION with the manifest.
  */
-const APP_VERSION = '0.4.0';
+const APP_VERSION = '0.8.0';
 const CACHE_NAME = `ofuq-v${APP_VERSION}`;
 
 const ASSETS = [
@@ -74,18 +74,23 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Network first, cache as the offline fallback.
+  //
+  // Cache-first used to serve yesterday's JS against today's HTML whenever the cache name
+  // did not change, which reads as "the update never arrived". The app is a few hundred KB,
+  // so asking the network first costs little and removes a whole class of "it did not
+  // update" bugs; the cache still answers instantly when the device is offline.
   event.respondWith(
-    caches.match(request).then((cached) => {
-      const network = fetch(request)
-        .then((response) => {
-          if (response.ok) {
-            const copy = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy)).catch(() => {});
-          }
-          return response;
-        })
-        .catch(() => cached || Response.error());
-      return cached || network;
-    })
+    fetch(request)
+      .then((response) => {
+        if (response.ok) {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy)).catch(() => {});
+        }
+        return response;
+      })
+      .catch(() =>
+        caches.match(request).then((cached) => cached || caches.match(indexUrl()) || Response.error())
+      )
   );
 });

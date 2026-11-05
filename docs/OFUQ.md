@@ -61,6 +61,78 @@ The city is a 100-plot scene: five districts of twenty plots, positions derived 
 - The scene owns no game state: every frame is derived from a store snapshot, which is why
   local mode and server mode look identical.
 
+## The market (players only)
+
+Selling to the city is instant and always available. Selling **to another player** is a
+different product: a real listing, a real price and a real counterparty.
+
+- **No simulation.** In local mode the market tab shows a gate («السوق بين اللاعبين يحتاج جلسة
+  خادم») and the board stays empty. There is no generated seller, no fake offer, no button that
+  cannot work.
+- **Listing** happens from the plot sheet: a price (minimum 100), a 48-hour default clock, one
+  open offer per plot. The sheet shows the **net after the 4% fee** before publishing, and warns
+  when the price is more than 15% below book value.
+- **Accepting** takes two taps on purpose (arm → confirm), because it moves real balance.
+- **One transaction, three ledger rows**: the buyer is debited `plot_purchase`, the seller is
+  credited `sale` and charged `market_fee`. The plot keeps its asset and level; the rental clock
+  restarts at the transfer, so the buyer never inherits the seller's accrued rent.
+- **Expiry** is enforced server-side (`expires_at`), the board only lists live offers, and an
+  expired offer cannot be accepted.
+
+| RPC | What it guarantees |
+| --- | --- |
+| `ofuq_list_offer(plot, price, hours, key)` | ownership, developed plot, price bounds, one open offer per plot |
+| `ofuq_cancel_offer(offer, key)` | seller only, open only |
+| `ofuq_accept_offer(offer, key)` | not your own offer, live offer, unchanged ownership, sufficient balance, atomic transfer |
+
+Non-monetary actions are idempotent too: `ofuq_market_requests (player_id, request_key)` makes a
+retried `list`/`cancel`/`accept` a no-op that returns the current snapshot.
+
+
+## Leasing (renting the income, not the plot)
+
+A sale moves the deed. A **lease** moves only the *income* for a fixed window: the tenant pays
+up front, collects the rent until the clock runs out, and the plot goes back to earning for its
+owner. Ownership never changes hands, so nobody loses a building they paid for.
+
+- **Listing** happens from the plot sheet, next to the market block: a fee (minimum 100), a
+  window of 1–168 hours (24 by default) and a 48-hour listing clock. The sheet shows the net
+  after the 4% fee, the rent per hour, and how much the tenant can actually collect.
+- **Accrued rent is settled to the owner first.** The instant a lease is accepted, whatever the
+  plot earned since the owner's last collection is paid to the owner in its own `rent` row. The
+  handover never confiscates earned income, and the tenant starts from zero.
+- **While the lease runs** the owner cannot collect («الإيجار للمستأجر حتى نهاية المدة»), cannot
+  sell to the city, and cannot list the plot for sale. The tenant collects through the normal
+  `ofuq_collect_rent`, capped at the same 8 hours.
+- **When it ends** the income returns to the owner automatically: leases are read as
+  `status = 'active' and ends_at > now()`, and `ofuq_expire_leases()` closes stale rows.
+- **One transaction, three ledger rows**: the tenant is debited `lease_payment`, the owner is
+  credited `lease_income` and charged `market_fee`.
+- **No simulation.** In local mode the lease board shows a gate; no lease is ever invented.
+
+| RPC | What it guarantees |
+| --- | --- |
+| `ofuq_list_lease(plot, fee, hours, window, key)` | ownership, developed plot, no running lease, no open offer, fee/hour bounds |
+| `ofuq_accept_lease(offer, key)` | lease offer only, not your own, live offer, unchanged ownership, no running lease, sufficient balance, settles accrued rent, atomic handover |
+
+A lease is private: `ofuq_leases` is readable only by its two players, while the *listing* lives
+on the public market board like any other offer.
+
+
+## Readiness & exports (v0.8.0)
+
+Two things a player should never have to take on faith:
+
+- **جاهزية المدينة المشتركة** (settings sheet): six measured items — endpoint configured,
+  session open, schema answering, snapshot fresh, ledger reconciling, no recent error. Every
+  green tick comes from a fact the app holds, and «افحص الاتصال الآن» performs a real round trip
+  to `ofuq_snapshot`, which is the only honest way to prove the schema is deployed. Each red item
+  carries the exact next step (which keys to add, which file to run). In local mode the button is
+  disabled instead of pretending to check something that does not exist.
+- **تصدير الحركات CSV**: the wallet's ledger as a file — same rows, same order, Arabic headers,
+  a BOM so Excel reads them, RFC-style quoting for commas and quotes, ISO timestamps. It is a copy
+  of the ledger, never a summary of it, so an exported file always reconciles with the balance.
+
 ## The ledger
 
 Money is not a number that changes; it is the sum of movements. Every action that touches the
@@ -69,6 +141,7 @@ balance writes exactly one row — `{ reason, amount, balanceAfter, ref, ts }` �
 
 - **Same vocabulary in both modes.** Reasons are the SQL strings: `signup_bonus`,
   `plot_purchase`, `development`, `upgrade`, `rent`, `sale`, `mission_reward`, `market_fee`,
+  `lease_payment`, `lease_income`,
   `admin_adjustment` — plus `opening_balance` for a wallet that predates the ledger.
 - **`balanceAfter` is the proof.** The wallet prints «الرصيد X — مطابق للسجل» by comparing the
   newest row with the balance. If they ever disagree the screen says so instead of hiding it.
@@ -79,6 +152,23 @@ balance writes exactly one row — `{ reason, amount, balanceAfter, ref, ts }` �
   filters are «الكل / داخل / خارج / إيجار».
 - A pre-ledger save is migrated to a single `opening_balance` row dated at the wallet's creation
   rather than pretending the history exists.
+
+## Weekly report & milestones
+
+Both are **derived, never stored** — they read the same ledger rows as the wallet, so they
+cannot tell a different story than the balance.
+
+- **تقرير الأسبوع** (league tab): income, spend and net for the current ISO week (Monday →
+  Monday, in the player's own timezone), a seven-bar chart whose bars are that day's net, the
+  best day, and the plot that earned the most. Comparison with last week appears only when last
+  week actually has rows; otherwise the card says «لا بيانات للأسبوع الماضي» instead of a fake
+  percentage.
+- **Opening balances are not income.** `signup_bonus` and `opening_balance` are excluded from
+  the report, otherwise every new wallet would "earn" 12,000 in week one.
+- **الإنجازات**: ten milestones (first plot, first build, five plots, all five districts, a
+  level-5 tower, ten collections, 100/hour income, 40,000 net worth, three sales, fifty ledger
+  rows) with a progress bar and no rewards. No cash, no XP, nothing to claim — a milestone you
+  cannot mint money from is a milestone that stays honest in both local and server mode.
 
 Vendoring: `vendor/three.module.min.js` (r150.1, MIT, 154 KB gzipped) is committed because the
 app ships as plain ES modules with no bundler and must stay offline-capable. See
@@ -155,9 +245,11 @@ listing. Those are provider features that need a domain and an identity decision
 
 - Password reset, email confirmation, Google/Apple, MFA, account linking and session expiry UX.
 - Realtime presence or push of other players' actions (the map refreshes on request only).
-- Player-to-player market, rentals/offers, missions beyond `ofuq_missions` seeds, and the
-  admin console. The ledger already has `mission_reward`, `market_fee` and `admin_adjustment`
-  reasons so those flows can be added without a migration of history.
+- **Rentals** (lease an asset for a number of hours) — sale offers ship in 0.5.0, rentals do not.
+- Missions beyond the `ofuq_missions` seeds, and the admin console. The ledger already has
+  `mission_reward` and `admin_adjustment` reasons so those flows need no history migration.
+- A browser-side market in local mode: deliberately not built — see «The market» above.
+- A local-mode lease: renting needs two real accounts, so the board stays gated instead.
 - The SQL has been validated by review and by the fake server, **not executed against a live
   Postgres** — no database is available in the build sandbox.
 

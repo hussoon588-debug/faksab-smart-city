@@ -70,13 +70,20 @@ create table if not exists public.ofuq_ledger (
   balance_after bigint not null check (balance_after >= 0),
   reason text not null check (reason in (
     'signup_bonus', 'plot_purchase', 'development', 'upgrade', 'rent', 'sale',
-    'mission_reward', 'market_fee', 'admin_adjustment'
+    'mission_reward', 'market_fee', 'admin_adjustment', 'lease_payment', 'lease_income'
   )),
   ref_id text,
   idempotency_key text,
   created_at timestamptz not null default now(),
   unique (player_id, idempotency_key)
 );
+-- Leasing added two reasons; widen the check on databases created before it existed.
+alter table public.ofuq_ledger drop constraint if exists ofuq_ledger_reason_check;
+alter table public.ofuq_ledger add constraint ofuq_ledger_reason_check check (reason in (
+  'signup_bonus', 'plot_purchase', 'development', 'upgrade', 'rent', 'sale',
+  'mission_reward', 'market_fee', 'admin_adjustment', 'lease_payment', 'lease_income'
+));
+
 create index if not exists ofuq_ledger_player_idx on public.ofuq_ledger (player_id, created_at desc);
 
 -- -------------------------------------------------------------------- plots ---
@@ -301,6 +308,61 @@ begin
       select jsonb_agg(c.mission_id) from public.ofuq_claims c
       where c.player_id = p.id and c.week_key = v_week
     ), '[]'::jsonb),
+    -- The board: every live offer from every player, plus who is selling it.
+    'offers', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', o.id,
+        'plotId', pl.id,
+        'districtId', pl.district_id,
+        'plotNo', pl.plot_no,
+        'assetId', pl.asset_id,
+        'level', pl.level,
+        'sellerId', o.seller_id,
+        'sellerName', sp.display_name,
+        'kind', o.kind,
+        'price', o.price,
+        'fee', coalesce(o.fee, 0),
+        'hours', o.hours,
+        'value', public.ofuq_plot_value(pl.price, pl.asset_id, pl.level),
+        'expiresAt', o.expires_at,
+        'createdAt', o.created_at,
+        'mine', o.seller_id = v_uid
+      ) order by o.created_at desc)
+      from public.ofuq_market_offers o
+      join public.ofuq_plots pl on pl.id = o.plot_id
+      join public.ofuq_players sp on sp.id = o.seller_id
+      where o.status = 'open' and o.expires_at > now()
+    ), '[]'::jsonb),
+    -- Leases the player is part of: the ones they rent out, and the ones they rent.
+    'leases', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', lease.id,
+        'plotId', pl.id,
+        'districtId', pl.district_id,
+        'plotNo', pl.plot_no,
+        'assetId', pl.asset_id,
+        'level', pl.level,
+        'rent', case when pl.asset_id is null then 0
+                     else public.ofuq_plot_rent(pl.asset_id, pl.level, d.tier) end,
+        'fee', lease.fee,
+        'lessorId', lease.lessor_id,
+        'lessorName', lp.display_name,
+        'lesseeId', lease.lessee_id,
+        'lesseeName', tp.display_name,
+        'startsAt', lease.starts_at,
+        'endsAt', lease.ends_at,
+        'lastCollectedAt', coalesce(pl.last_collected_at, lease.starts_at),
+        'tenant', lease.lessee_id = v_uid,
+        'owner', lease.lessor_id = v_uid
+      ) order by lease.starts_at desc)
+      from public.ofuq_leases lease
+      join public.ofuq_plots pl on pl.id = lease.plot_id
+      join public.ofuq_districts d on d.id = pl.district_id
+      join public.ofuq_players lp on lp.id = lease.lessor_id
+      join public.ofuq_players tp on tp.id = lease.lessee_id
+      where lease.status = 'active' and lease.ends_at > now()
+        and (lease.lessor_id = p.id or lease.lessee_id = p.id)
+    ), '[]'::jsonb),
     -- The wallet screen can only prove the balance if it can read the movements.
     'ledger', coalesce((
       select jsonb_agg(jsonb_build_object(
@@ -465,6 +527,8 @@ declare
   v_uid uuid := public.ofuq_ensure_player();
   v_plot public.ofuq_plots%rowtype;
   v_district public.ofuq_districts%rowtype;
+  v_lease_lessee uuid;
+  v_is_tenant boolean := false;
   v_rate bigint;
   v_elapsed numeric;
   v_capped numeric;
@@ -480,7 +544,15 @@ begin
 
   select * into v_plot from public.ofuq_plots where id = p_plot for update;
   if not found then raise exception 'القطعة غير موجودة' using errcode = 'P0002'; end if;
-  if v_plot.owner_id is distinct from v_uid then raise exception 'هذه القطعة ليست لك' using errcode = '42501'; end if;
+  v_lease_lessee := public.ofuq_active_lease_lessee(v_plot.id);
+  v_is_tenant := v_lease_lessee is not null and v_lease_lessee = v_uid;
+  if v_plot.owner_id is distinct from v_uid and not v_is_tenant then
+    raise exception 'هذه القطعة ليست لك' using errcode = '42501';
+  end if;
+  -- While a lease runs the income belongs to the tenant: the owner already took the fee.
+  if v_lease_lessee is not null and v_plot.owner_id = v_uid then
+    raise exception 'القطعة مؤجَّرة — الإيجار للمستأجر حتى نهاية المدة' using errcode = 'P0001';
+  end if;
   if v_plot.asset_id is null then raise exception 'لا يوجد أصل على هذه القطعة' using errcode = 'P0001'; end if;
   select * into v_district from public.ofuq_districts where id = v_plot.district_id;
   v_rate := public.ofuq_plot_rent(v_plot.asset_id, v_plot.level, v_district.tier);
@@ -516,6 +588,9 @@ begin
   select * into v_plot from public.ofuq_plots where id = p_plot for update;
   if not found then raise exception 'القطعة غير موجودة' using errcode = 'P0002'; end if;
   if v_plot.owner_id is distinct from v_uid then raise exception 'هذه القطعة ليست لك' using errcode = '42501'; end if;
+  if public.ofuq_plot_is_leased(v_plot.id) then
+    raise exception 'القطعة مؤجَّرة — انتظر انتهاء الإيجار قبل البيع' using errcode = 'P0001';
+  end if;
 
   v_value := public.ofuq_plot_value(v_plot.price, v_plot.asset_id, v_plot.level);
   v_proceeds := round(v_value * 0.96);                     -- 4% platform fee
@@ -603,6 +678,391 @@ create trigger on_auth_user_created_ofuq
 after insert on auth.users
 for each row execute procedure public.ofuq_handle_new_user();
 
+
+-- ------------------------------------------------------------ player market ---
+-- The market is between real players only. There is no simulated counterparty: an offer
+-- is a real plot, with a real owner, a real price and a real expiry.
+
+create table if not exists public.ofuq_market_offers (
+  id uuid primary key default gen_random_uuid(),
+  plot_id uuid not null references public.ofuq_plots(id) on delete cascade,
+  seller_id uuid not null references public.ofuq_players(id) on delete cascade,
+  -- A listing is either a sale ('sale') or a lease of the plot's income ('lease').
+  kind text not null default 'sale' check (kind in ('sale', 'lease')),
+  price bigint not null default 0 check (price >= 0),
+  fee bigint check (fee is null or fee > 0),
+  hours integer check (hours is null or (hours >= 1 and hours <= 168)),
+  status text not null default 'open' check (status in ('open', 'accepted', 'cancelled', 'expired')),
+  buyer_id uuid references public.ofuq_players(id) on delete set null,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null,
+  closed_at timestamptz,
+  check (expires_at > created_at)
+);
+
+-- Databases created before leasing: add the columns and keep the price rule per kind.
+alter table public.ofuq_market_offers add column if not exists kind text not null default 'sale';
+alter table public.ofuq_market_offers add column if not exists fee bigint;
+alter table public.ofuq_market_offers add column if not exists hours integer;
+alter table public.ofuq_market_offers drop constraint if exists ofuq_market_offers_price_check;
+alter table public.ofuq_market_offers add constraint ofuq_market_offers_price_check check (
+  (kind = 'sale' and price > 0) or
+  (kind = 'lease' and coalesce(fee, 0) > 0 and hours between 1 and 168)
+);
+alter table public.ofuq_market_offers drop constraint if exists ofuq_market_offers_kind_check;
+alter table public.ofuq_market_offers add constraint ofuq_market_offers_kind_check
+  check (kind in ('sale', 'lease'));
+
+-- A plot can sit on the market once, and only while the offer is open.
+create unique index if not exists ofuq_market_one_open_per_plot
+  on public.ofuq_market_offers (plot_id) where status = 'open';
+
+create index if not exists ofuq_market_open_idx
+  on public.ofuq_market_offers (status, expires_at);
+
+-- Non-monetary RPCs need idempotency too (nothing in the ledger to key on).
+create table if not exists public.ofuq_market_requests (
+  player_id uuid not null references public.ofuq_players(id) on delete cascade,
+  request_key text not null,
+  kind text not null,
+  offer_id uuid,
+  created_at timestamptz not null default now(),
+  primary key (player_id, request_key)
+);
+
+create or replace function public.ofuq_market_replay(p_player uuid, p_key text)
+returns boolean language plpgsql security definer set search_path = '' as $$
+begin
+  if p_key is null then return false; end if;
+  if exists (
+    select 1 from public.ofuq_market_requests r
+    where r.player_id = p_player and r.request_key = p_key
+  ) then
+    return true;
+  end if;
+  return false;
+end;
+$$;
+
+create or replace function public.ofuq_market_remember(p_player uuid, p_key text, p_kind text, p_offer uuid)
+returns void language plpgsql security definer set search_path = '' as $$
+begin
+  if p_key is null then return; end if;
+  insert into public.ofuq_market_requests (player_id, request_key, kind, offer_id)
+  values (p_player, p_key, p_kind, p_offer)
+  on conflict (player_id, request_key) do nothing;
+end;
+$$;
+
+/** Close every offer whose clock ran out. Cheap, indexed, called by the market RPCs. */
+create or replace function public.ofuq_expire_offers()
+returns void language plpgsql security definer set search_path = '' as $$
+begin
+  update public.ofuq_market_offers
+     set status = 'expired', closed_at = now()
+   where status = 'open' and expires_at <= now();
+end;
+$$;
+
+create or replace function public.ofuq_list_offer(
+  p_plot uuid, p_price bigint, p_hours integer, p_idempotency text
+) returns jsonb language plpgsql security definer set search_path = '' as $$
+declare
+  v_uid uuid := public.ofuq_ensure_player();
+  v_plot public.ofuq_plots%rowtype;
+begin
+  if public.ofuq_market_replay(v_uid, p_idempotency) then
+    return public.ofuq_snapshot();
+  end if;
+
+  perform public.ofuq_expire_offers();
+
+  select * into v_plot from public.ofuq_plots where id = p_plot for update;
+  if not found then raise exception 'القطعة غير موجودة' using errcode = 'P0002'; end if;
+  if v_plot.owner_id is distinct from v_uid then raise exception 'هذه القطعة ليست لك' using errcode = '42501'; end if;
+  if v_plot.asset_id is null then raise exception 'طوّر القطعة قبل عرضها للبيع' using errcode = 'P0001'; end if;
+  if public.ofuq_plot_is_leased(v_plot.id) then
+    raise exception 'القطعة مؤجَّرة — انتظر انتهاء الإيجار قبل البيع' using errcode = 'P0001';
+  end if;
+  if p_price is null or p_price < 100 then raise exception 'أقل سعر مسموح 100 عملة' using errcode = 'P0001'; end if;
+  if p_price > 100000000 then raise exception 'السعر أعلى من الحد المسموح' using errcode = 'P0001'; end if;
+  if p_hours is null or p_hours < 1 or p_hours > 168 then raise exception 'مدة العرض بين ساعة و168 ساعة' using errcode = 'P0001'; end if;
+
+  update public.ofuq_market_offers
+     set status = 'cancelled', closed_at = now()
+   where plot_id = p_plot and status = 'open';
+
+  insert into public.ofuq_market_offers (plot_id, seller_id, price, expires_at)
+  values (p_plot, v_uid, p_price, now() + make_interval(hours => p_hours));
+
+  perform public.ofuq_market_remember(v_uid, p_idempotency, 'list', p_plot);
+  return public.ofuq_snapshot();
+end;
+$$;
+
+create or replace function public.ofuq_cancel_offer(p_offer uuid, p_idempotency text)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare
+  v_uid uuid := public.ofuq_ensure_player();
+  v_offer public.ofuq_market_offers%rowtype;
+begin
+  if public.ofuq_market_replay(v_uid, p_idempotency) then
+    return public.ofuq_snapshot();
+  end if;
+
+  select * into v_offer from public.ofuq_market_offers where id = p_offer for update;
+  if not found then raise exception 'العرض غير موجود' using errcode = 'P0002'; end if;
+  if v_offer.seller_id is distinct from v_uid then raise exception 'هذا العرض ليس لك' using errcode = '42501'; end if;
+  if v_offer.status <> 'open' then raise exception 'العرض لم يعد مفتوحاً' using errcode = 'P0001'; end if;
+
+  update public.ofuq_market_offers
+     set status = 'cancelled', closed_at = now()
+   where id = p_offer;
+
+  perform public.ofuq_market_remember(v_uid, p_idempotency, 'cancel', p_offer);
+  return public.ofuq_snapshot();
+end;
+$$;
+
+/**
+ * Buy a plot from another player. One transaction: the buyer pays, the seller is paid and
+ * charged the 4% market fee, ownership moves, and three ledger rows explain all of it.
+ * The plot keeps its asset and level — the buyer inherits the building, not the seller's
+ * accrued rent (the accrual clock restarts at the transfer).
+ */
+create or replace function public.ofuq_accept_offer(p_offer uuid, p_idempotency text)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare
+  v_uid uuid := public.ofuq_ensure_player();
+  v_offer public.ofuq_market_offers%rowtype;
+  v_plot public.ofuq_plots%rowtype;
+  v_fee bigint;
+  v_net bigint;
+begin
+  if public.ofuq_market_replay(v_uid, p_idempotency) then
+    return public.ofuq_snapshot();
+  end if;
+
+  perform public.ofuq_expire_offers();
+
+  select * into v_offer from public.ofuq_market_offers where id = p_offer for update;
+  if not found then raise exception 'العرض غير موجود' using errcode = 'P0002'; end if;
+  if v_offer.status <> 'open' then raise exception 'العرض لم يعد متاحاً' using errcode = 'P0001'; end if;
+  if v_offer.seller_id = v_uid then raise exception 'لا يمكنك قبول عرضك' using errcode = 'P0001'; end if;
+
+  select * into v_plot from public.ofuq_plots where id = v_offer.plot_id for update;
+  if v_plot.owner_id is distinct from v_offer.seller_id then
+    raise exception 'العرض غير صالح — تغيّرت ملكية القطعة' using errcode = 'P0001';
+  end if;
+
+  -- Buyer pays the full price…
+  perform public.ofuq_apply_balance(v_uid, -v_offer.price, 'plot_purchase', v_offer.plot_id::text, p_idempotency || ':buy');
+  -- …the seller is credited the price and charged the fee as two separate rows.
+  v_fee := round(v_offer.price * 0.04);
+  v_net := v_offer.price - v_fee;
+  perform public.ofuq_apply_balance(v_offer.seller_id, v_offer.price, 'sale', v_offer.plot_id::text, p_idempotency || ':sale');
+  perform public.ofuq_apply_balance(v_offer.seller_id, -v_fee, 'market_fee', v_offer.plot_id::text, p_idempotency || ':fee');
+
+  update public.ofuq_plots
+     set owner_id = v_uid, purchased_at = now(), last_collected_at = now()
+   where id = v_plot.id;
+
+  update public.ofuq_market_offers
+     set status = 'accepted', buyer_id = v_uid, closed_at = now()
+   where id = p_offer;
+
+  update public.ofuq_players set xp = xp + 40, last_seen_at = now() where id = v_uid;
+  update public.ofuq_players set xp = xp + 50, last_seen_at = now() where id = v_offer.seller_id;
+
+  perform public.ofuq_market_remember(v_uid, p_idempotency, 'accept', p_offer);
+  return public.ofuq_snapshot();
+end;
+$$;
+
+
+-- -------------------------------------------------------------------- leases ---
+-- A lease rents out the *income* of a developed plot for a fixed window. The deed never
+-- moves: the tenant pays the fee up front and collects the rent until the clock runs out,
+-- then the plot goes back to earning for its owner. Nobody loses the rent that accrued
+-- before the handover — it is settled to the owner in the same transaction.
+
+create table if not exists public.ofuq_leases (
+  id uuid primary key default gen_random_uuid(),
+  offer_id uuid references public.ofuq_market_offers(id) on delete set null,
+  plot_id uuid not null references public.ofuq_plots(id) on delete cascade,
+  lessor_id uuid not null references public.ofuq_players(id) on delete cascade,
+  lessee_id uuid not null references public.ofuq_players(id) on delete cascade,
+  fee bigint not null check (fee > 0),
+  status text not null default 'active' check (status in ('active', 'ended')),
+  starts_at timestamptz not null default now(),
+  ends_at timestamptz not null,
+  created_at timestamptz not null default now(),
+  check (ends_at > starts_at),
+  check (lessor_id <> lessee_id)
+);
+
+-- One running lease per plot. The predicate must be immutable, hence the status column.
+create unique index if not exists ofuq_leases_one_active_per_plot
+  on public.ofuq_leases (plot_id) where status = 'active';
+
+create index if not exists ofuq_leases_party_idx
+  on public.ofuq_leases (lessor_id, lessee_id, ends_at);
+
+/** Close every lease whose window ran out. Called by the lease RPCs and the snapshot. */
+create or replace function public.ofuq_expire_leases()
+returns void language plpgsql security definer set search_path = '' as $$
+begin
+  update public.ofuq_leases
+     set status = 'ended'
+   where status = 'active' and ends_at <= now();
+end;
+$$;
+
+/** Is a lease running on this plot right now? */
+create or replace function public.ofuq_plot_is_leased(p_plot uuid)
+returns boolean language plpgsql security definer set search_path = '' as $$
+begin
+  return exists (
+    select 1 from public.ofuq_leases
+    where plot_id = p_plot and status = 'active' and ends_at > now()
+  );
+end;
+$$;
+
+/** Who collects this plot's rent right now, if it is leased? NULL when it is not. */
+create or replace function public.ofuq_active_lease_lessee(p_plot uuid)
+returns uuid language plpgsql security definer set search_path = '' as $$
+declare
+  v_lessee uuid;
+begin
+  select lessee_id into v_lessee
+    from public.ofuq_leases
+   where plot_id = p_plot and status = 'active' and ends_at > now()
+   limit 1;
+  return v_lessee;
+end;
+$$;
+
+/**
+ * Pay the owner the rent that accrued up to this moment, so handing the plot over to a
+ * tenant never confiscates what the owner already earned. Returns the amount credited.
+ */
+create or replace function public.ofuq_settle_rent(p_plot uuid, p_key text)
+returns bigint language plpgsql security definer set search_path = '' as $$
+declare
+  v_plot public.ofuq_plots%rowtype;
+  v_district public.ofuq_districts%rowtype;
+  v_rate bigint;
+  v_amount bigint;
+begin
+  select * into v_plot from public.ofuq_plots where id = p_plot for update;
+  if not found or v_plot.owner_id is null or v_plot.asset_id is null then return 0; end if;
+  select * into v_district from public.ofuq_districts where id = v_plot.district_id;
+  v_rate := public.ofuq_plot_rent(v_plot.asset_id, v_plot.level, v_district.tier);
+  v_amount := floor(least(greatest(extract(epoch from (now() - coalesce(v_plot.last_collected_at, now()))) / 3600.0, 0), 8) * v_rate)::bigint;
+  if v_amount <= 0 then return 0; end if;
+  perform public.ofuq_apply_balance(v_plot.owner_id, v_amount, 'rent', v_plot.id::text, p_key);
+  update public.ofuq_plots set last_collected_at = now() where id = v_plot.id;
+  return v_amount;
+end;
+$$;
+
+create or replace function public.ofuq_list_lease(
+  p_plot uuid, p_fee bigint, p_hours integer, p_window integer, p_idempotency text
+) returns jsonb language plpgsql security definer set search_path = '' as $$
+declare
+  v_uid uuid := public.ofuq_ensure_player();
+  v_plot public.ofuq_plots%rowtype;
+  v_window integer := coalesce(p_window, 48);
+begin
+  if public.ofuq_market_replay(v_uid, p_idempotency) then
+    return public.ofuq_snapshot();
+  end if;
+
+  perform public.ofuq_expire_offers();
+  perform public.ofuq_expire_leases();
+
+  select * into v_plot from public.ofuq_plots where id = p_plot for update;
+  if not found then raise exception 'القطعة غير موجودة' using errcode = 'P0002'; end if;
+  if v_plot.owner_id is distinct from v_uid then raise exception 'هذه القطعة ليست لك' using errcode = '42501'; end if;
+  if v_plot.asset_id is null then raise exception 'طوّر القطعة قبل تأجيرها' using errcode = 'P0001'; end if;
+  if public.ofuq_plot_is_leased(p_plot) then raise exception 'القطعة مؤجَّرة بالفعل' using errcode = 'P0001'; end if;
+  if exists (select 1 from public.ofuq_market_offers where plot_id = p_plot and status = 'open') then
+    raise exception 'هذه القطعة معروضة بالفعل — ألغِ العرض أولاً' using errcode = 'P0001';
+  end if;
+  if p_fee is null or p_fee < 100 then raise exception 'أقل مبلغ مسموح 100 عملة' using errcode = 'P0001'; end if;
+  if p_fee > 100000000 then raise exception 'المبلغ أعلى من الحد المسموح' using errcode = 'P0001'; end if;
+  if p_hours is null or p_hours < 1 or p_hours > 168 then
+    raise exception 'مدة الإيجار بين 1 و168 ساعة' using errcode = 'P0001';
+  end if;
+  if v_window < 1 or v_window > 168 then v_window := 48; end if;
+
+  insert into public.ofuq_market_offers (plot_id, seller_id, kind, price, fee, hours, expires_at)
+  values (p_plot, v_uid, 'lease', 0, p_fee, p_hours, now() + make_interval(hours => v_window));
+
+  perform public.ofuq_market_remember(v_uid, p_idempotency, 'lease-list', p_plot);
+  return public.ofuq_snapshot();
+end;
+$$;
+
+/**
+ * Rent a plot's income from another player. One transaction: the tenant pays the fee, the
+ * owner is paid and charged the 4% platform fee, the rent already accrued is settled to the
+ * owner, and the lease starts. The plot itself never changes hands.
+ */
+create or replace function public.ofuq_accept_lease(p_offer uuid, p_idempotency text)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare
+  v_uid uuid := public.ofuq_ensure_player();
+  v_offer public.ofuq_market_offers%rowtype;
+  v_plot public.ofuq_plots%rowtype;
+  v_platform_fee bigint;
+begin
+  if public.ofuq_market_replay(v_uid, p_idempotency) then
+    return public.ofuq_snapshot();
+  end if;
+
+  perform public.ofuq_expire_offers();
+  perform public.ofuq_expire_leases();
+
+  select * into v_offer from public.ofuq_market_offers where id = p_offer for update;
+  if not found then raise exception 'العرض غير موجود' using errcode = 'P0002'; end if;
+  if v_offer.kind <> 'lease' then raise exception 'هذا عرض بيع — استخدم شراء القطعة' using errcode = 'P0001'; end if;
+  if v_offer.status <> 'open' then raise exception 'العرض لم يعد متاحاً' using errcode = 'P0001'; end if;
+  if v_offer.seller_id = v_uid then raise exception 'لا يمكنك استئجار أصلك' using errcode = 'P0001'; end if;
+
+  select * into v_plot from public.ofuq_plots where id = v_offer.plot_id for update;
+  if v_plot.owner_id is distinct from v_offer.seller_id then
+    raise exception 'العرض غير صالح — تغيّرت ملكية القطعة' using errcode = 'P0001';
+  end if;
+  if public.ofuq_plot_is_leased(v_plot.id) then
+    raise exception 'القطعة مؤجَّرة بالفعل' using errcode = 'P0001';
+  end if;
+
+  -- The owner keeps what the plot earned before the tenant took over.
+  perform public.ofuq_settle_rent(v_plot.id, p_idempotency || ':settle');
+
+  perform public.ofuq_apply_balance(v_uid, -v_offer.fee, 'lease_payment', v_plot.id::text, p_idempotency || ':pay');
+  v_platform_fee := round(v_offer.fee * 0.04);
+  perform public.ofuq_apply_balance(v_offer.seller_id, v_offer.fee, 'lease_income', v_plot.id::text, p_idempotency || ':income');
+  perform public.ofuq_apply_balance(v_offer.seller_id, -v_platform_fee, 'market_fee', v_plot.id::text, p_idempotency || ':fee');
+
+  insert into public.ofuq_leases (offer_id, plot_id, lessor_id, lessee_id, fee, starts_at, ends_at)
+  values (v_offer.id, v_plot.id, v_offer.seller_id, v_uid, v_offer.fee, now(), now() + make_interval(hours => v_offer.hours));
+
+  update public.ofuq_plots set last_collected_at = now() where id = v_plot.id;
+  update public.ofuq_market_offers
+     set status = 'accepted', buyer_id = v_uid, closed_at = now()
+   where id = p_offer;
+
+  update public.ofuq_players set xp = xp + 30, last_seen_at = now() where id = v_uid;
+  update public.ofuq_players set xp = xp + 40, last_seen_at = now() where id = v_offer.seller_id;
+
+  perform public.ofuq_market_remember(v_uid, p_idempotency, 'lease-accept', p_offer);
+  return public.ofuq_snapshot();
+end;
+$$;
+
 -- --------------------------------------------------------------------- RLS ---
 
 alter table public.ofuq_players      enable row level security;
@@ -615,6 +1075,8 @@ alter table public.ofuq_districts    enable row level security;
 alter table public.ofuq_assets       enable row level security;
 alter table public.ofuq_missions     enable row level security;
 alter table public.ofuq_levels       enable row level security;
+alter table public.ofuq_market_offers   enable row level security;
+alter table public.ofuq_market_requests enable row level security;
 
 drop policy if exists ofuq_players_read_self on public.ofuq_players;
 create policy ofuq_players_read_self on public.ofuq_players
@@ -653,18 +1115,29 @@ create policy ofuq_missions_read on public.ofuq_missions for select to authentic
 drop policy if exists ofuq_levels_read on public.ofuq_levels;
 create policy ofuq_levels_read on public.ofuq_levels for select to authenticated using (true);
 
+-- The board is readable by every signed-in player: an offer nobody can see is not an offer.
+drop policy if exists ofuq_market_offers_read on public.ofuq_market_offers;
+create policy ofuq_market_offers_read on public.ofuq_market_offers
+  for select to authenticated using (true);
+
+-- A lease is visible to the two players who signed it, and to nobody else.
+drop policy if exists ofuq_leases_read on public.ofuq_leases;
+create policy ofuq_leases_read on public.ofuq_leases
+  for select to authenticated using (lessor_id = auth.uid() or lessee_id = auth.uid());
+
 -- No INSERT/UPDATE/DELETE policies anywhere: only the SECURITY DEFINER functions write.
 
 revoke all on public.ofuq_players, public.ofuq_wallets, public.ofuq_ledger,
               public.ofuq_plots, public.ofuq_weekly_stats, public.ofuq_claims,
               public.ofuq_districts, public.ofuq_assets, public.ofuq_missions,
-              public.ofuq_levels
+              public.ofuq_levels, public.ofuq_market_offers, public.ofuq_market_requests,
+              public.ofuq_leases
   from anon, authenticated;
 
 grant select on public.ofuq_players, public.ofuq_wallets, public.ofuq_ledger,
                 public.ofuq_plots, public.ofuq_weekly_stats, public.ofuq_claims,
                 public.ofuq_districts, public.ofuq_assets, public.ofuq_missions,
-                public.ofuq_levels
+                public.ofuq_levels, public.ofuq_market_offers, public.ofuq_leases
   to authenticated;
 
 -- RPC surface: authenticated only.
@@ -675,6 +1148,18 @@ revoke all on function public.ofuq_upgrade_plot(uuid, text) from public, anon;
 revoke all on function public.ofuq_collect_rent(uuid, text) from public, anon;
 revoke all on function public.ofuq_sell_plot(uuid, text) from public, anon;
 revoke all on function public.ofuq_claim_mission(text, text) from public, anon;
+revoke all on function public.ofuq_list_offer(uuid, bigint, integer, text) from public, anon;
+revoke all on function public.ofuq_cancel_offer(uuid, text) from public, anon;
+revoke all on function public.ofuq_accept_offer(uuid, text) from public, anon;
+revoke all on function public.ofuq_expire_offers() from public, anon;
+revoke all on function public.ofuq_market_replay(uuid, text) from public, anon;
+revoke all on function public.ofuq_list_lease(uuid, bigint, integer, integer, text) from public, anon;
+revoke all on function public.ofuq_accept_lease(uuid, text) from public, anon;
+revoke all on function public.ofuq_expire_leases() from public, anon;
+revoke all on function public.ofuq_plot_is_leased(uuid) from public, anon;
+revoke all on function public.ofuq_active_lease_lessee(uuid) from public, anon;
+revoke all on function public.ofuq_settle_rent(uuid, text) from public, anon;
+revoke all on function public.ofuq_market_remember(uuid, text, text, uuid) from public, anon;
 
 grant execute on function public.ofuq_snapshot() to authenticated;
 grant execute on function public.ofuq_purchase_plot(text, integer, text) to authenticated;
@@ -683,6 +1168,11 @@ grant execute on function public.ofuq_upgrade_plot(uuid, text) to authenticated;
 grant execute on function public.ofuq_collect_rent(uuid, text) to authenticated;
 grant execute on function public.ofuq_sell_plot(uuid, text) to authenticated;
 grant execute on function public.ofuq_claim_mission(text, text) to authenticated;
+grant execute on function public.ofuq_list_offer(uuid, bigint, integer, text) to authenticated;
+grant execute on function public.ofuq_cancel_offer(uuid, text) to authenticated;
+grant execute on function public.ofuq_accept_offer(uuid, text) to authenticated;
+grant execute on function public.ofuq_list_lease(uuid, bigint, integer, integer, text) to authenticated;
+grant execute on function public.ofuq_accept_lease(uuid, text) to authenticated;
 
 -- Live city updates (ownership changes appear for every player).
 do $$ begin

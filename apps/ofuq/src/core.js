@@ -278,6 +278,8 @@ export const LEDGER_REASONS = {
   sale: { label: 'بيع أصل', kind: 'in' },
   mission_reward: { label: 'مكافأة تحدي', kind: 'in' },
   market_fee: { label: 'عمولة سوق', kind: 'out' },
+  lease_payment: { label: 'دفع إيجار مستأجر', kind: 'out' },
+  lease_income: { label: 'إيراد تأجير', kind: 'in' },
   admin_adjustment: { label: 'تعديل إداري', kind: 'in' }
 };
 
@@ -333,4 +335,424 @@ export function groupLedger(entries = [], now = Date.now()) {
     group.net += Number(entry.amount ?? 0);
   }
   return [...groups.values()];
+}
+
+/* ------------------------------------------------------------------ market --- */
+
+/**
+ * The market is between players only — there is no simulated counterparty, so every
+ * helper here is about *real* offers: their fee, their clock, and whether they are live.
+ */
+export const marketFee = (price) => Math.round(Math.max(0, Number(price) || 0) * ECONOMY.market.feeRate);
+
+/** What the seller actually receives after the market fee. */
+export const offerProceeds = (price) => Math.max(0, Math.round(Number(price) || 0) - marketFee(price));
+
+export const offerRemainingMs = (offer, now = Date.now()) =>
+  Math.max(0, Number(offer?.expiresAt ?? 0) - now);
+
+export const isOfferLive = (offer, now = Date.now()) => offerRemainingMs(offer, now) > 0;
+
+/**
+ * Arabic counted nouns: 1 واحد، 2 مثنى، 3–10 جمع، 11+ مفرد منصوب.
+ * `counted(3, ['ساعة', 'ساعتان', 'ساعات', 'ساعة'])` → «3 ساعات».
+ */
+export function counted(n, [one, two, few, many]) {
+  const value = Math.max(0, Math.round(Number(n) || 0));
+  if (value === 1) return one;
+  if (value === 2) return two;
+  if (value >= 3 && value <= 10) return `${value} ${few}`;
+  return `${value} ${many}`;
+}
+
+/** "3 ساعات" / "45 دقيقة" — a countdown the player can act on, not a timestamp. */
+export function formatRemaining(ms) {
+  const minutes = Math.floor(Math.max(0, ms) / 60000);
+  if (minutes <= 0) return 'انتهى';
+  const minutesWord = (value) => counted(value, ['دقيقة واحدة', 'دقيقتان', 'دقائق', 'دقيقة']);
+  if (minutes < 60) return minutesWord(minutes);
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  const hoursWord = counted(hours, ['ساعة واحدة', 'ساعتان', 'ساعات', 'ساعة']);
+  return rest === 0 ? hoursWord : `${hoursWord} و${minutesWord(rest)}`;
+}
+
+/** Price sanity for the seller's form; the server enforces the same bounds. */
+export function validateOfferPrice(rawPrice, plot, district) {
+  const price = Math.round(Number(rawPrice));
+  const { minPrice, maxPrice } = ECONOMY.market;
+  if (!Number.isFinite(price)) return { ok: false, error: 'أدخل سعراً صحيحاً.' };
+  if (price < minPrice) return { ok: false, error: `أقل سعر مسموح ${minPrice} عملة.` };
+  if (price > maxPrice) return { ok: false, error: 'السعر أعلى من الحد المسموح.' };
+  const value = plot && district ? plotValue(plot, district) : 0;
+  return {
+    ok: true,
+    value,
+    price,
+    net: offerProceeds(price),
+    fee: marketFee(price),
+    // Not an error: selling far below value is allowed, but the sheet says so first.
+    belowValue: value > 0 && price < Math.round(value * 0.85)
+  };
+}
+
+/** Board summary for the market header. */
+export function marketSummary(offers = [], now = Date.now()) {
+  const live = offers.filter((offer) => isOfferLive(offer, now) && !isLeaseListing(offer));
+  return {
+    open: live.length,
+    mine: live.filter((offer) => offer.mine).length,
+    cheapest: live.reduce((best, offer) => (best === null || offer.price < best ? offer.price : best), null)
+  };
+}
+
+/** Live offers for a plot the player owns (so the sheet can show "already listed"). */
+export const offerForPlot = (offers = [], plotId, now = Date.now()) =>
+  offers.find((offer) => offer.plotId === plotId && isOfferLive(offer, now)) ?? null;
+
+/* -------------------------------------------------------------- insights --- */
+
+const startOfDay = (ts) => {
+  const date = new Date(ts);
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+};
+
+/** ISO week: Monday 00:00 → next Monday 00:00, in the player's own timezone. */
+export function weekBounds(now = Date.now()) {
+  const day = new Date(now).getDay() || 7; // 1 = Monday … 7 = Sunday
+  const start = startOfDay(now) - (day - 1) * DAY_MS;
+  return { start, end: start + 7 * DAY_MS };
+}
+
+const withinWeek = (ts, start, end) => ts >= start && ts < end;
+
+/**
+ * The weekly report is read straight from the ledger — it cannot disagree with the wallet,
+ * because both are the same rows. Nothing here is estimated or extrapolated.
+ */
+export function weeklyReport(state, now = Date.now()) {
+  const { start, end } = weekBounds(now);
+  const previousStart = start - 7 * DAY_MS;
+  const ledger = Array.isArray(state.ledger) ? state.ledger : [];
+
+  // Opening balances are where the wallet started, not what it earned: counting 12,000 as
+  // "income" in week one would be the same kind of lie as an unsourced number.
+  const opening = new Set(['signup_bonus', 'opening_balance']);
+  const rows = ledger.filter((entry) => withinWeek(entry.ts, start, end) && !opening.has(entry.reason));
+  const previousRows = ledger.filter((entry) => withinWeek(entry.ts, previousStart, start) && !opening.has(entry.reason));
+  const totals = ledgerTotals(rows);
+  const previous = ledgerTotals(previousRows);
+
+  const change = (current, before) =>
+    before === 0 ? null : Math.round(((current - before) / Math.abs(before)) * 100);
+
+  const days = Array.from({ length: 7 }, (_, index) => {
+    const dayStart = start + index * DAY_MS;
+    const dayRows = rows.filter((entry) => withinWeek(entry.ts, dayStart, dayStart + DAY_MS));
+    const dayTotals = ledgerTotals(dayRows);
+    return {
+      index,
+      label: new Date(dayStart).toLocaleDateString('ar', { weekday: 'short' }),
+      net: dayTotals.net,
+      inflow: dayTotals.inflow,
+      outflow: dayTotals.outflow,
+      count: dayRows.length
+    };
+  });
+
+  // Which plot actually paid: rent rows carry the plot key in `ref`.
+  const rentByPlot = new Map();
+  for (const entry of rows) {
+    if (entry.reason !== 'rent' || !entry.ref) continue;
+    rentByPlot.set(entry.ref, (rentByPlot.get(entry.ref) ?? 0) + entry.amount);
+  }
+  const top = [...rentByPlot.entries()].sort((a, b) => b[1] - a[1])[0] ?? null;
+  const topPlot = top ? (state.plots?.[top[0]] ?? null) : null;
+
+  const bestDay = days.reduce((best, day) => (day.net > (best?.net ?? -Infinity) ? day : best), null);
+
+  return {
+    start,
+    end,
+    key: weekKey(new Date(now)),
+    rows,
+    count: rows.length,
+    totals,
+    previous,
+    hasPrevious: previousRows.length > 0,
+    incomeChange: change(totals.inflow, previous.inflow),
+    spendChange: change(totals.outflow, previous.outflow),
+    netChange: change(totals.net, previous.net),
+    days,
+    bestDay: bestDay && bestDay.net > 0 ? bestDay : null,
+    topEarner: top ? { key: top[0], amount: top[1], plot: topPlot } : null,
+    daysLeft: Math.max(0, Math.ceil((end - now) / DAY_MS))
+  };
+}
+
+/* --------------------------------------------------------- achievements --- */
+/**
+ * Milestones are *derived*, never stored and never rewarded with cash. That keeps them
+ * honest in both modes: the server owns the wallet, and nothing here can mint money or
+ * claim a badge the player did not earn.
+ */
+export const ACHIEVEMENTS = [
+  { id: 'first_plot', name: 'أول قطعة', hint: 'امتلك قطعة أرض', target: 1, value: (s) => listPlots(s).length },
+  {
+    id: 'first_build',
+    name: 'أول بناء',
+    hint: 'طوّر أصلاً واحداً',
+    target: 1,
+    value: (s) => listPlots(s).filter((plot) => plot.assetId).length
+  },
+  { id: 'five_plots', name: 'خمس قطع', hint: 'امتلك ٥ قطع', target: 5, value: (s) => listPlots(s).length },
+  {
+    id: 'every_district',
+    name: 'خمسة أحياء',
+    hint: 'امتلك في الأحياء الخمسة',
+    target: DISTRICTS.length,
+    value: (s) => new Set(listPlots(s).map((plot) => plot.districtId)).size
+  },
+  {
+    id: 'tower',
+    name: 'برج',
+    hint: 'أصل بالمستوى الخامس',
+    target: 1,
+    value: (s) => (listPlots(s).some((plot) => (plot.level ?? 0) >= ECONOMY.maxLevel) ? 1 : 0)
+  },
+  {
+    id: 'collector',
+    name: 'مُحصِّل',
+    hint: '١٠ عمليات تحصيل',
+    target: 10,
+    value: (s) => Number(s.stats?.collected ?? 0)
+  },
+  {
+    id: 'landlord',
+    name: 'مالك أصول',
+    hint: 'دخل ١٠٠ عملة/ساعة',
+    target: 100,
+    value: (s) => Math.round(hourlyIncome(s))
+  },
+  {
+    id: 'whale',
+    name: 'ثروة',
+    hint: 'صافي قيمة ٤٠٬٠٠٠',
+    target: 40000,
+    value: (s) => Math.round(netWorth(s))
+  },
+  {
+    id: 'trader',
+    name: 'تاجر',
+    hint: '٣ عمليات بيع',
+    target: 3,
+    value: (s) => Number(s.stats?.sold ?? 0)
+  },
+  {
+    id: 'auditor',
+    name: 'دفتر منتظم',
+    hint: '٥٠ حركة مالية مسجّلة',
+    target: 50,
+    value: (s) => (Array.isArray(s.ledger) ? s.ledger.length : 0)
+  }
+];
+
+export function achievementBoard(state) {
+  return ACHIEVEMENTS.map((achievement) => {
+    const raw = Math.max(0, Number(achievement.value(state)) || 0);
+    const shown = Math.min(raw, achievement.target);
+    return {
+      id: achievement.id,
+      name: achievement.name,
+      hint: achievement.hint,
+      target: achievement.target,
+      value: shown,
+      done: raw >= achievement.target,
+      progress: achievement.target > 0 ? shown / achievement.target : 1
+    };
+  });
+}
+
+/* ---------------------------------------------------------------- leases --- */
+/**
+ * A lease rents out the *income* of a developed plot for a fixed window. Ownership never
+ * moves: the tenant pays the fee up front and collects the rent until the clock runs out,
+ * then the plot goes back to earning for its owner. The fee is the owner's, minus the same
+ * 4% the market takes on a sale.
+ */
+
+export const leaseGross = (rent, hours) =>
+  Math.round(Math.max(0, Number(rent) || 0) * Math.max(0, Number(hours) || 0));
+
+export function suggestedLeaseFee(rent, hours) {
+  const gross = leaseGross(rent, hours);
+  const { minFee, maxFee, suggestedRate } = ECONOMY.lease;
+  return Math.min(maxFee, Math.max(minFee, Math.round((gross * suggestedRate) / 10) * 10));
+}
+
+export function validateLeaseFee(raw) {
+  const fee = Math.round(Number(raw));
+  const { minFee, maxFee } = ECONOMY.lease;
+  if (!Number.isFinite(fee)) return { ok: false, error: 'أدخل مبلغاً صحيحاً.' };
+  if (fee < minFee) return { ok: false, error: `أقل مبلغ مسموح ${minFee} عملة.` };
+  if (fee > maxFee) return { ok: false, error: 'المبلغ أعلى من الحد المسموح.' };
+  return { ok: true, fee, net: offerProceeds(fee), platformFee: marketFee(fee) };
+}
+
+export function validateLeaseHours(raw) {
+  const hours = Math.round(Number(raw));
+  const { minHours, maxHours } = ECONOMY.lease;
+  if (!Number.isFinite(hours)) return { ok: false, error: 'أدخل عدد ساعات صحيحاً.' };
+  if (hours < minHours) return { ok: false, error: `أقل مدة ${minHours} ساعة.` };
+  if (hours > maxHours) return { ok: false, error: `أطول مدة ${maxHours} ساعة.` };
+  return { ok: true, hours };
+}
+
+export const isLeaseLive = (lease, now = Date.now()) => Boolean(lease) && Number(lease.endsAt ?? 0) > now;
+
+export const leaseRemainingMs = (lease, now = Date.now()) => Math.max(0, Number(lease?.endsAt ?? 0) - now);
+
+export const liveLeases = (leases = [], now = Date.now()) =>
+  (Array.isArray(leases) ? leases : []).filter((lease) => isLeaseLive(lease, now));
+
+/**
+ * What the tenant can collect right now: elapsed since the last collection, capped at the
+ * same 8 hours as an owned plot, times the rent the server published for that lease.
+ */
+export function leaseCollectible(lease, now = Date.now()) {
+  if (!isLeaseLive(lease, now)) return 0;
+  const since = Math.max(Number(lease.lastCollectedAt ?? 0), Number(lease.startsAt ?? 0));
+  const hours = Math.min(ECONOMY.accrualCapHours, Math.max(0, (now - since) / HOUR_MS));
+  return Math.floor(hours * Math.max(0, Number(lease.rent) || 0));
+}
+
+export function leaseSummary(leases = [], now = Date.now()) {
+  const live = liveLeases(leases, now);
+  return {
+    live: live.length,
+    listed: live.filter((lease) => lease.owner).length,
+    rented: live.filter((lease) => lease.tenant).length,
+    collectible: live
+      .filter((lease) => lease.tenant)
+      .reduce((sum, lease) => sum + leaseCollectible(lease, now), 0)
+  };
+}
+
+/** The lease covering a plot, if any — the owner needs to see it before selling. */
+export function leaseForPlot(state, districtId, plotNo, now = Date.now()) {
+  return (
+    liveLeases(state.leases ?? [], now).find(
+      (lease) => lease.districtId === districtId && Number(lease.plotNo) === Number(plotNo)
+    ) ?? null
+  );
+}
+
+/** Owned plots that are leased out cannot be sold or re-listed until the lease ends. */
+export function isPlotLeased(state, districtId, plotNo, now = Date.now()) {
+  return Boolean(leaseForPlot(state, districtId, plotNo, now));
+}
+
+/** A listing is either a sale or a lease; both share the board and the idempotency table. */
+export const isLeaseListing = (offer) => offer?.kind === 'lease';
+export const saleListings = (offers = []) => (Array.isArray(offers) ? offers : []).filter((offer) => !isLeaseListing(offer));
+export const leaseListings = (offers = []) => (Array.isArray(offers) ? offers : []).filter(isLeaseListing);
+
+export function leaseListingSummary(offers = [], now = Date.now()) {
+  const live = leaseListings(offers).filter((offer) => isOfferLive(offer, now));
+  return {
+    open: live.length,
+    mine: live.filter((offer) => offer.mine).length,
+    cheapest: live.reduce((best, offer) => (best === null || offer.fee < best ? offer.fee : best), null)
+  };
+}
+
+/* ------------------------------------------------------------ data & health --- */
+
+const csvCell = (value) => {
+  const text = String(value ?? '');
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+};
+
+/**
+ * The player's ledger as CSV — the same rows the screen shows, nothing added.
+ * A BOM goes first so Excel opens Arabic headers instead of mojibake.
+ */
+export function buildLedgerCsv(entries = [], { withBom = true } = {}) {
+  const rows = [
+    ['التاريخ', 'السبب', 'البيان', 'المبلغ', 'الرصيد بعد', 'المرجع'],
+    ...(Array.isArray(entries) ? entries : []).map((entry) => [
+      Number(entry?.ts) ? new Date(entry.ts).toISOString() : '',
+      entry?.reason ?? '',
+      ledgerLabel(entry?.reason),
+      Number(entry?.amount ?? 0),
+      Number.isFinite(Number(entry?.balanceAfter)) ? Number(entry.balanceAfter) : '',
+      entry?.ref ?? ''
+    ])
+  ];
+  const body = rows.map((row) => row.map(csvCell).join(',')).join('\r\n');
+  return `${withBom ? '\ufeff' : ''}${body}\r\n`;
+}
+
+/**
+ * What the player can actually verify about the shared city, and what to do next.
+ * Nothing here is guessed: every 'ok' comes from a fact the app already holds, and the
+ * round-trip check is the only way to prove the schema is really deployed.
+ */
+export function serverReadiness(facts = {}, now = Date.now()) {
+  const {
+    mode = 'local',
+    hasEndpoint = false,
+    signedIn = false,
+    syncedAt = 0,
+    lastError = null,
+    reconciles = true,
+    roundTripMs = null
+  } = facts;
+
+  const items = [
+    {
+      id: 'endpoint',
+      label: 'عنوان الخادم مضبوط',
+      ok: mode === 'supabase' && hasEndpoint,
+      hint: 'أضف SUPABASE_URL و SUPABASE_ANON_KEY في config/apps.json (أو ملف .env) ثم أعد البناء.'
+    },
+    {
+      id: 'session',
+      label: 'جلسة لاعب مفتوحة',
+      ok: signedIn,
+      hint: 'سجّل الدخول من بطاقة الحساب أعلاه — السوق والإيجار يحتاجان حساباً حقيقياً.'
+    },
+    {
+      id: 'schema',
+      label: 'المخطط يستجيب على الخادم',
+      ok: roundTripMs !== null && roundTripMs >= 0,
+      hint: 'شغّل supabase/ofuq/schema.sql في محرّر SQL ثم اضغط «افحص الآن».'
+    },
+    {
+      id: 'sync',
+      label: 'الرصيد والملكية من الخادم',
+      ok: Boolean(syncedAt) && now - syncedAt < 15 * 60 * 1000,
+      hint: 'اضغط «مزامنة» — اللعبة تعرض آخر لقطة وصلت من الخادم.'
+    },
+    {
+      id: 'ledger',
+      label: 'الدفتر يطابق الرصيد',
+      ok: reconciles,
+      hint: 'تحقق من سجل الحركات: مجموع البنود يجب أن يفسّر الرصيد بالكامل.'
+    },
+    {
+      id: 'errors',
+      label: 'لا أخطاء حديثة',
+      ok: !lastError,
+      hint: lastError ? `آخر خطأ: ${lastError}` : 'ستظهر هنا أي مشكلة يتعذر إخفاؤها.'
+    }
+  ];
+
+  return {
+    items,
+    ready: items.every((item) => item.ok),
+    done: items.filter((item) => item.ok).length,
+    total: items.length,
+    roundTripMs
+  };
 }

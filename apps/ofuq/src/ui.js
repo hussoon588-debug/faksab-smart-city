@@ -7,16 +7,31 @@
  */
 import { APP, ASSET_TYPES, DISTRICTS, ECONOMY } from './config.js';
 import {
+  achievementBoard,
   assetFor,
+  buildLedgerCsv,
   challengeBoard,
+  counted,
   districtFor,
   districtStats,
   formatCompact,
   formatNumber,
+  formatRemaining,
   groupLedger,
   ledgerLabel,
   ledgerReconciles,
   ledgerTotals,
+  leaseCollectible,
+  leaseForPlot,
+  leaseGross,
+  leaseListingSummary,
+  leaseListings,
+  marketFee,
+  marketSummary,
+  serverReadiness,
+  offerForPlot,
+  offerProceeds,
+  offerRemainingMs,
   plotLedger,
   hourlyIncome,
   leaderboard,
@@ -24,13 +39,18 @@ import {
   netYield,
   pendingRent,
   plotKey,
+  validateOfferPrice,
   plotPrice,
   plotRent,
   plotValue,
   portfolioValue,
   saleProceeds,
+  suggestedLeaseFee,
   upgradeCost,
-  weekDaysLeft
+  validateLeaseFee,
+  validateLeaseHours,
+  weekDaysLeft,
+  weeklyReport
 } from './core.js';
 import {
   CITY_FILTERS,
@@ -66,6 +86,7 @@ export function mount(store) {
     // City view: `city` is the WebGL scene once (and only if) it exists.
     filter: 'all',
     ledgerFilter: 'all',
+    confirmOffer: null,
     city: null,
     cityStatus: 'idle',
     cityModel: null
@@ -73,6 +94,7 @@ export function mount(store) {
   let toastTimer = 0;
   let searchTimer = 0;
   let authBusy = false;
+  let confirmTimer = 0;
   let resetArmed = false;
 
   /* --------------------------------------------------------------- helpers */
@@ -112,6 +134,11 @@ export function mount(store) {
     renderCityMap(snap);
     renderPortfolio(snap);
     renderLedger(snap);
+    renderHealth(snap);
+    renderMarket(snap);
+    renderMyLeases(snap);
+    renderReport(snap);
+    renderAchievements(snap);
     renderLeague(snap);
     if (view.sheetKey) renderSheet(snap);
     renderSettingsState();
@@ -119,6 +146,9 @@ export function mount(store) {
 
   function renderHeader(snap) {
     const { state } = snap;
+    // The build is on screen, so "did my update arrive?" is answerable at a glance.
+    const version = $('buildVersion');
+    if (version && version.textContent !== APP.version) version.textContent = `v${APP.version}`;
     const pending = Object.values(snap.pending).reduce((sum, value) => sum + value, 0);
     const readyCount = Object.values(snap.pending).filter((value) => value > 0).length;
 
@@ -449,6 +479,340 @@ export function mount(store) {
     list.append(verdict);
   }
 
+  /* ---------------------------------------------------------------- market --- */
+
+  const offerLabel = (offer) => `${offer.districtId === 'harbor' ? 'حي الميناء' : ''}`;
+
+  function marketRow(offer, now) {
+    const district = districtFor(offer.districtId);
+    const asset = assetFor(offer.assetId);
+    const remaining = formatRemaining(offerRemainingMs(offer, now));
+    const gap = offer.value > 0 ? Math.round(((offer.price - offer.value) / offer.value) * 100) : 0;
+    const gapLabel =
+      offer.value <= 0
+        ? ''
+        : gap <= -5
+          ? `<span class="good">أرخص ${Math.abs(gap)}% من القيمة</span>`
+          : gap >= 5
+            ? `<span class="bad">أغلى ${gap}% من القيمة</span>`
+            : '<span>بسعر القيمة تقريباً</span>';
+    const armed = view.confirmOffer === offer.id;
+
+    const action = offer.mine
+      ? `<button class="btn btn-ghost sm" type="button" data-action="cancel-offer" data-offer="${offer.id}">إلغاء العرض</button>`
+      : `<button class="btn ${armed ? 'btn-danger' : 'btn-gold'} sm" type="button" data-action="accept-offer" data-offer="${offer.id}">
+           ${armed ? `تأكيد الشراء بـ ${formatNumber(offer.price)}` : `شراء بـ ${formatNumber(offer.price)}`}
+         </button>`;
+
+    return `<article class="market-row">
+      <header>
+        <b>${escapeHtml(district?.name ?? '')} · قطعة ${offer.plotNo}</b>
+        <small>${offer.mine ? 'عرضك' : escapeHtml(offer.sellerName || 'لاعب')}</small>
+      </header>
+      <div class="market-meta">
+        <span><b>${formatNumber(offer.price)}</b> عملة</span>
+        <span>${escapeHtml(asset?.name ?? 'أرض')}${offer.level ? ` · مستوى ${offer.level}` : ''}</span>
+        ${gapLabel}
+        <span>ينتهي بعد ${escapeHtml(remaining)}</span>
+      </div>
+      <div class="market-actions">${action}</div>
+    </article>`;
+  }
+
+  function renderMarket(snap) {
+    const { state } = snap;
+    const list = $('marketList');
+    const gate = $('marketGate');
+    const empty = $('marketEmpty');
+    const note = $('marketNote');
+    if (!list || !gate || !empty) return;
+
+    const offers = Array.isArray(state.offers) ? state.offers : [];
+    const summary = marketSummary(offers, Date.now());
+    renderLeaseBoard(snap);
+    $('marketCount').textContent =
+      summary.open === 0 ? 'لا عروض' : `${summary.open} عرض · أرخص ${formatCompact(summary.cheapest)}`;
+
+    if (!store.auth.available) {
+      note.textContent = 'هذه النسخة تعمل محلياً: لا يوجد لاعبون آخرون، ولا نلفّق عروضاً من عندنا.';
+      gate.hidden = false;
+      list.innerHTML = '';
+      empty.hidden = true;
+      return;
+    }
+
+    if (!store.auth.signedIn) {
+      note.textContent = 'سجّل الدخول لعرض السوق وشراء قطع اللاعبين.';
+      gate.hidden = false;
+      list.innerHTML = '';
+      empty.hidden = true;
+      return;
+    }
+
+    gate.hidden = true;
+    note.textContent =
+      summary.mine > 0
+        ? `لديك ${summary.mine} عرض مفتوح. العمولة ٤٪ تُخصم من البائع عند البيع.`
+        : 'اختر قطعة من المحفظة ثم «نشر في السوق» لعرضها على اللاعبين.';
+    empty.hidden = offers.length > 0;
+    list.innerHTML = offers.map((offer) => marketRow(offer, Date.now())).join('');
+  }
+
+  /** A purchase is irreversible, so the first tap only arms the button. */
+  function handleAcceptOffer(offerId) {
+    const offer = (store.state.offers ?? []).find((item) => item.id === offerId);
+    if (!offer) return act({ ok: false, message: 'هذا العرض لم يعد متاحاً.' });
+    if (view.confirmOffer !== offerId) {
+      view.confirmOffer = offerId;
+      clearTimeout(confirmTimer);
+      confirmTimer = setTimeout(() => {
+        view.confirmOffer = null;
+        render();
+      }, 6000);
+      render();
+      return toast(`اضغط مرة أخرى لتأكيد شراء قطعة ${offer.plotNo} بـ ${formatNumber(offer.price)}.`);
+    }
+    view.confirmOffer = null;
+    clearTimeout(confirmTimer);
+    return act(store.dispatch('acceptOffer', { offerId }), 20);
+  }
+
+  /* ---------------------------------------------------------------- leasing --- */
+
+  const rentOfListing = (offer) =>
+    plotRent({ assetId: offer.assetId, level: offer.level }, districtFor(offer.districtId));
+
+  /** The tenant buys a window, not a plot — but it still costs money, so it arms first. */
+  function handleAcceptLease(offerId) {
+    const offer = leaseListings(store.state.offers ?? []).find((item) => item.id === offerId);
+    if (!offer) return act({ ok: false, message: 'عرض الإيجار لم يعد متاحاً.' });
+    if (view.confirmOffer !== offerId) {
+      view.confirmOffer = offerId;
+      clearTimeout(confirmTimer);
+      confirmTimer = setTimeout(() => {
+        view.confirmOffer = null;
+        render();
+      }, 6000);
+      render();
+      return toast(`اضغط مرة أخرى لتأكيد استئجار قطعة ${offer.plotNo} بـ ${formatNumber(offer.fee)}.`);
+    }
+    view.confirmOffer = null;
+    clearTimeout(confirmTimer);
+    return act(store.dispatch('acceptLease', { offerId }), 20);
+  }
+
+  function leaseRow(offer, now) {
+    const district = districtFor(offer.districtId);
+    const asset = assetFor(offer.assetId);
+    const rent = rentOfListing(offer);
+    const capacity = leaseGross(rent, offer.hours ?? 0);
+    const share = capacity > 0 ? Math.round((offer.fee / capacity) * 100) : 0;
+    const armed = view.confirmOffer === offer.id;
+    const action = offer.mine
+      ? `<button class="btn btn-ghost sm" type="button" data-action="cancel-offer" data-offer="${offer.id}">إلغاء العرض</button>`
+      : `<button class="btn ${armed ? 'btn-danger' : 'btn-gold'} sm" type="button" data-action="accept-lease" data-offer="${offer.id}">
+           ${armed ? `تأكيد الاستئجار بـ ${formatNumber(offer.fee)}` : `استئجار بـ ${formatNumber(offer.fee)}`}
+         </button>`;
+    return `<article class="market-row">
+      <header>
+        <b>${escapeHtml(district?.name ?? '')} · قطعة ${offer.plotNo}</b>
+        <small>${offer.mine ? 'عرضك' : `يؤجّرها ${escapeHtml(offer.sellerName || 'لاعب')}`}</small>
+      </header>
+      <div class="market-meta">
+        <span><b>${formatNumber(offer.fee)}</b> عملة</span>
+        <span>${escapeHtml(asset?.name ?? 'أرض')} · ${offer.hours} ساعة</span>
+        <span class="lease-hours">إيجار الأصل ${formatNumber(rent)}/ساعة · مدة العقد ${escapeHtml(counted(offer.hours ?? 0, ['ساعة', 'ساعتان', 'ساعات', 'ساعة']))}</span>
+        <span>ينتهي العرض بعد ${escapeHtml(formatRemaining(offerRemainingMs(offer, now)))}</span>
+      </div>
+      <div class="market-meta">
+        <span>أقصى ما يجمعه المستأجر ${formatNumber(capacity)} — تدفع ${share}% منه مقدماً</span>
+      </div>
+      <div class="market-actions">${action}</div>
+    </article>`;
+  }
+
+  function renderLeaseBoard(snap) {
+    const list = $('leaseList');
+    const gate = $('leaseGate');
+    const empty = $('leaseEmpty');
+    const note = $('leaseNote');
+    if (!list || !gate || !empty) return;
+
+    const offers = leaseListings(snap.state.offers ?? []);
+    const summary = leaseListingSummary(snap.state.offers ?? [], Date.now());
+    $('leaseCount').textContent =
+      summary.open === 0 ? 'لا عروض' : `${summary.open} عرض · أرخص ${formatCompact(summary.cheapest)}`;
+
+    if (!store.auth.available || !store.auth.signedIn) {
+      note.textContent = store.auth.available
+        ? 'سجّل الدخول لعرض إيجارات اللاعبين واستئجار دخل أصولهم.'
+        : 'هذه النسخة تعمل محلياً: الإيجار بين لاعبين حقيقيين لا يمكن اختراعه.';
+      gate.hidden = false;
+      list.innerHTML = '';
+      empty.hidden = true;
+      return;
+    }
+
+    gate.hidden = true;
+    note.textContent =
+      summary.mine > 0
+        ? `لديك ${summary.mine} عرض إيجار مفتوح. العمولة ٤٪ تُخصم من المالك عند التسليم.`
+        : 'استأجر دخل أصل من لاعب آخر لمدة محددة، واجمعه قبل انتهاء المدة.';
+    empty.hidden = offers.length > 0;
+    list.innerHTML = offers.map((offer) => leaseRow(offer, Date.now())).join('');
+  }
+
+  /** Leases and listings the player is part of, shown where the money already lives. */
+  function renderMyLeases(snap) {
+    const card = $('leaseCard');
+    const list = $('myLeaseList');
+    if (!card || !list) return;
+    const now = store.now;
+    const leases = (snap.state.leases ?? []).filter((lease) => lease.endsAt > now);
+    card.hidden = leases.length === 0;
+    if (leases.length === 0) {
+      list.innerHTML = '';
+      return;
+    }
+    $('myLeaseCount').textContent = `${leases.length} عقد`;
+    list.innerHTML = leases
+      .map((lease) => {
+        const district = districtFor(lease.districtId);
+        const asset = assetFor(lease.assetId);
+        const left = formatRemaining(lease.endsAt - now);
+        if (!lease.tenant) {
+          return `<div class="market-row">
+            <header><b>${escapeHtml(district?.name ?? '')} · قطعة ${lease.plotNo}</b><small>مؤجَّرة إلى ${escapeHtml(lease.lesseeName || 'لاعب')}</small></header>
+            <div class="market-meta">
+              <span>${escapeHtml(asset?.name ?? 'أصل')} · ${formatNumber(lease.rent)}/ساعة</span>
+              <span>تعود إليك بعد ${escapeHtml(left)}</span>
+              <span>استلمت ${formatNumber(lease.fee)} مقدماً</span>
+            </div>
+          </div>`;
+        }
+        const pending = leaseCollectible(lease, now);
+        return `<div class="market-row">
+          <header><b>${escapeHtml(district?.name ?? '')} · قطعة ${lease.plotNo}</b><small>مستأجرة من ${escapeHtml(lease.lessorName || 'لاعب')}</small></header>
+          <div class="market-meta">
+            <span>${escapeHtml(asset?.name ?? 'أصل')} · ${formatNumber(lease.rent)}/ساعة</span>
+            <span>ينتهي بعد ${escapeHtml(left)}</span>
+          </div>
+          <div class="lease-catch">
+            <span><b>${formatNumber(pending)}</b> عملة جاهزة للتحصيل<small>${pending > 0 ? 'التحصيل يذهب إلى محفظتك' : 'لم يتراكم إيجار بعد'}</small></span>
+            <button class="btn btn-gold sm" type="button" data-action="collect-lease" data-plot="${lease.plotId}" ${pending > 0 ? '' : 'disabled'}>
+              تحصيل
+            </button>
+          </div>
+        </div>`;
+      })
+      .join('');
+  }
+
+  function handleListLease() {
+    const key = view.sheetKey;
+    const plot = store.state.plots[key];
+    if (!plot) return act({ ok: false, message: 'لا توجد قطعة لتأجيرها.' });
+    const feeCheck = validateLeaseFee($('leaseFee')?.value);
+    if (!feeCheck.ok) return act(feeCheck);
+    const hoursCheck = validateLeaseHours($('leaseHours')?.value);
+    if (!hoursCheck.ok) return act(hoursCheck);
+    return act(store.dispatch('listLease', { plotKey: key, fee: feeCheck.fee, hours: hoursCheck.hours }), 16);
+  }
+
+  /**
+   * The lease block inside the plot sheet: the running contract if there is one, the form
+   * if the player can sign one, and an honest line when there is no server to sign on.
+   */
+  function renderLeaseBlock(plot, district, state) {
+    const now = store.now;
+    const live = leaseForPlot(state, plot.districtId, plot.plotNo, now);
+    if (live) {
+      return `<div class="sheet-history lease-live">
+        <h3>مؤجَّرة</h3>
+        <p><b>${escapeHtml(live.lesseeName || 'لاعب')}</b> يجمع إيجار الأصل — تعود إليك بعد ${escapeHtml(
+          formatRemaining(live.endsAt - now)
+        )}.</p>
+        <small>استلمت ${formatNumber(live.fee)} مقدماً · العمولة ٤٪ خُصمت عند التسليم.</small>
+      </div>`;
+    }
+    if (!plot.assetId) return '';
+    const rent = plotRent(plot, district);
+    const hours = ECONOMY.lease.defaultHours;
+    const suggested = suggestedLeaseFee(rent, hours);
+    const capacity = leaseGross(rent, hours);
+
+    if (!store.auth.available) {
+      return `<div class="offer-live"><small>تأجير دخل هذا الأصل يحتاج خادماً مُهيّأً — يستطيع أي لاعب استئجاره لمدة تحددها. إيجار الأصل ${formatNumber(rent)}/ساعة، وأقصى ما يجمعه المستأجر في ${counted(hours, ['ساعة', 'ساعتين', 'ساعات', 'ساعة'])} ${formatNumber(capacity)} عملة.</small></div>`;
+    }
+    if (!store.auth.signedIn) {
+      return `<div class="offer-live"><small>سجّل الدخول لعرض دخل هذا الأصل للإيجار.</small></div>`;
+    }
+    return `<div class="offer-form">
+      <label>
+        <span>أجّر دخل الأصل لمدة</span>
+        <input id="leaseHours" type="number" inputmode="numeric" min="${ECONOMY.lease.minHours}" max="${ECONOMY.lease.maxHours}" step="1" value="${hours}">
+      </label>
+      <label>
+        <span>المقابل الذي تطلبه (${ECONOMY.lease.minFee} عملة كحد أدنى)</span>
+        <input id="leaseFee" type="number" inputmode="numeric" min="${ECONOMY.lease.minFee}" step="10" value="${suggested}">
+      </label>
+      <small id="leaseNet">صافي لك بعد العمولة: ${formatNumber(offerProceeds(suggested))}</small>
+      <small class="lease-hours">أقصى ما يجمعه المستأجر في هذه المدة ${formatNumber(capacity)} عملة (${formatNumber(rent)}/ساعة، وسقف التراكم ٨ ساعات في المرة).</small>
+      <button class="btn btn-gold" type="button" data-action="list-lease">انشر عرض الإيجار</button>
+      <small class="fineprint">الملكية تبقى لك، ولا يمكنك بيع الأصل أو تأجيره مرة أخرى حتى تنتهي المدة.</small>
+    </div>`;
+  }
+
+  function handleListOffer() {
+    const key = view.sheetKey;
+    const plot = store.state.plots[key];
+    const input = $('offerPrice');
+    if (!plot || !input) return act({ ok: false, message: 'لا توجد قطعة لعرضها.' });
+    const district = districtFor(plot.districtId);
+    const check = validateOfferPrice(input.value, plot, district);
+    if (!check.ok) return act(check);
+    if (check.belowValue && view.offerArmed !== key) {
+      view.offerArmed = key;
+      return act({
+        ok: false,
+        message: `السعر أقل من القيمة الدفترية (${formatNumber(check.value)}). اضغط «نشر في السوق» مرة أخرى للتأكيد.`
+      });
+    }
+    view.offerArmed = null;
+    return act(store.dispatch('listOffer', { plotKey: key, price: check.price }), 16);
+  }
+
+  /**
+   * Selling to the city is instant; selling to a player needs a price and a session.
+   * The block never appears in local mode — no fake market, no disabled mystery button.
+   */
+  function renderOfferBlock(plot, district, state) {
+    const offer = offerForPlot(state.offers ?? [], plot.id ?? null);
+    if (offer) {
+      return `<div class="offer-live">
+        <b>معروض في السوق بـ ${formatNumber(offer.price)}</b>
+        <small>ينتهي بعد ${formatRemaining(offerRemainingMs(offer))} · صافيك بعد العمولة ${formatNumber(offerProceeds(offer.price))}</small>
+        <button class="btn btn-ghost sm" type="button" data-action="cancel-offer" data-offer="${offer.id}">إلغاء العرض</button>
+      </div>`;
+    }
+    if (!store.auth.available) {
+      return `<div class="offer-live"><small>عرض القطع على لاعبين آخرين يحتاج خادماً مُهيّأً — البيع الفوري أعلاه يعمل دائماً.</small></div>`;
+    }
+    if (!store.auth.signedIn) {
+      return `<div class="offer-live"><small>سجّل الدخول لعرض هذه القطعة على بقية اللاعبين.</small></div>`;
+    }
+    const suggested = plotValue(plot, district);
+    return `<div class="offer-form">
+      <label>
+        <span>اعرضها في السوق بسعر (١٠٠ عملة كحد أدنى)</span>
+        <input id="offerPrice" type="number" inputmode="numeric" min="${ECONOMY.market.minPrice}" step="50" value="${suggested}">
+      </label>
+      <small id="offerNet">صافي لك بعد العمولة: ${formatNumber(offerProceeds(suggested))}</small>
+      <button class="btn btn-gold" type="button" data-action="list-offer">نشر في السوق</button>
+      <small class="fineprint">العمولة ${Math.round(ECONOMY.market.feeRate * 100)}% تُخصم من البائع وتظهر سطراً مستقلاً في دفتره.</small>
+    </div>`;
+  }
+
   function renderPlotHistory(key, state) {
     const entries = plotLedger(Array.isArray(state.ledger) ? state.ledger : [], key).slice(0, 4);
     if (entries.length === 0) return '';
@@ -462,13 +826,146 @@ export function mount(store) {
     return `<div class="sheet-history"><h3>سجل هذه القطعة</h3><ul>${rows}</ul></div>`;
   }
 
+  /* ------------------------------------------------------------ readiness --- */
+
+  function renderHealth(snap) {
+    const list = $('healthList');
+    if (!list) return;
+    const { state } = snap;
+    const health = store.health ?? { lastSyncAt: 0, lastError: null, roundTripMs: null };
+    const report = serverReadiness(
+      {
+        mode: store.mode,
+        hasEndpoint: Boolean(store.remote?.endpoint),
+        signedIn: Boolean(store.auth?.signedIn),
+        syncedAt: health.lastSyncAt,
+        lastError: health.lastError,
+        reconciles: ledgerReconciles(state.ledger ?? [], state.cash),
+        roundTripMs: health.roundTripMs
+      },
+      store.now
+    );
+
+    $('healthState').textContent =
+      store.mode === 'local'
+        ? `الوضع الحالي: محلي على هذا الجهاز — ${report.done} / ${report.total} بند جاهز للخادم.`
+        : `الخادم: ${store.remote?.endpoint ?? '—'} · ${report.done} / ${report.total} بند جاهز${
+            health.roundTripMs !== null ? ` · ${health.roundTripMs}ms` : ''
+          }.`;
+
+    list.innerHTML = report.items
+      .map(
+        (item) => `<div class="health-row ${item.ok ? 'is-ok' : 'is-todo'}">
+          <i aria-hidden="true">${item.ok ? '✓' : '•'}</i>
+          <span><b>${escapeHtml(item.label)}</b>${item.ok ? '' : `<small>${escapeHtml(item.hint)}</small>`}</span>
+        </div>`
+      )
+      .join('');
+    const check = $('healthCheck');
+    if (check) check.disabled = store.mode === 'local';
+  }
+
+  /** The CSV is the ledger, not a report about it: same rows, same order. */
+  function exportLedgerCsv() {
+    const state = store.state;
+    const csv = buildLedgerCsv(state.ledger ?? []);
+    const name = `ofuq-ledger-${new Date(store.now).toISOString().slice(0, 10)}.csv`;
+    try {
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = name;
+      link.rel = 'noopener';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      const rows = Math.max(0, (state.ledger ?? []).length);
+      toast(`تم تصدير ${formatNumber(rows)} حركة إلى ${name}.`);
+    } catch {
+      toast('تعذر إنشاء الملف على هذا المتصفح.');
+    }
+  }
+
+  /* -------------------------------------------------------------- insights --- */
+
+  const signedPct = (value) => (value === null ? null : `${value > 0 ? '+' : ''}${value}%`);
+
+  function renderReport(snap) {
+    const report = weeklyReport(snap.state, Date.now());
+    const node = $('reportKey');
+    if (!node) return;
+
+    node.textContent = `${report.key} · ينتهي بعد ${counted(report.daysLeft, ['يوم واحد', 'يومان', 'أيام', 'يوماً'])}`;
+    $('rpIncome').textContent = formatCompact(report.totals.inflow);
+    $('rpSpend').textContent = formatCompact(report.totals.outflow);
+    $('rpNet').textContent = `${report.totals.net >= 0 ? '+' : '−'}${formatCompact(Math.abs(report.totals.net))}`;
+
+    // Seven bars, honest to the cent: each one is that day's net from the ledger.
+    const peak = Math.max(1, ...report.days.map((day) => Math.abs(day.net)));
+    $('rpChart').innerHTML = report.days
+      .map((day) => {
+        if (day.net === 0) return '<span class="bar is-empty" style="height:4%"></span>';
+        const height = Math.max(6, Math.round((Math.abs(day.net) / peak) * 100));
+        return `<span class="bar ${day.net < 0 ? 'is-negative' : ''}" style="height:${height}%"></span>`;
+      })
+      .join('');
+    $('rpChart').setAttribute(
+      'aria-label',
+      report.days.map((day) => `${day.label}: ${formatNumber(day.net)}`).join(' · ')
+    );
+
+    const parts = [];
+    if (report.count === 0) {
+      parts.push('لا حركات مالية هذا الأسبوع بعد — ابدأ بشراء قطعة أو تطوير أصل.');
+    } else {
+      if (report.hasPrevious) {
+        parts.push(
+          `الدخل ${signedPct(report.incomeChange) ?? '—'} والمصروف ${signedPct(report.spendChange) ?? '—'} مقارنة بالأسبوع الماضي.`
+        );
+      } else {
+        parts.push('لا بيانات للأسبوع الماضي — هذا أول أسبوع مسجّل.');
+      }
+      if (report.topEarner) {
+        const district = districtFor(report.topEarner.plot?.districtId);
+        parts.push(
+          `أعلى دخل: ${district?.name ?? 'قطعة'} · قطعة ${report.topEarner.plot?.plotNo ?? ''} (${formatNumber(report.topEarner.amount)}).`
+        );
+      }
+      if (report.bestDay) parts.push(`أفضل يوم: ${report.bestDay.label}.`);
+    }
+    $('rpNote').textContent = parts.join(' ');
+  }
+
+  function renderAchievements() {
+    const list = $('achievementList');
+    if (!list) return;
+    const board = achievementBoard(store.state);
+    const done = board.filter((item) => item.done).length;
+    $('achievementCount').textContent = `${done} / ${board.length}`;
+    list.innerHTML = board
+      .map(
+        (item) => `<div class="achievement ${item.done ? 'is-done' : ''}">
+          <span class="achievement-ico" aria-hidden="true">${item.done ? '✓' : '·'}</span>
+          <span class="achievement-main">
+            <b>${escapeHtml(item.name)}</b>
+            <small>${escapeHtml(item.hint)}</small>
+            <span class="achievement-bar"><i style="width:${Math.round(item.progress * 100)}%"></i></span>
+          </span>
+          <span class="achievement-value">${formatCompact(item.value)} / ${formatCompact(item.target)}</span>
+        </div>`
+      )
+      .join('');
+  }
+
   function renderLeague(snap) {
     const { state } = snap;
     const rows = leaderboard(state);
     const me = rows.find((row) => row.you);
     $('rankBadge').textContent = `#${me.rank}`;
     $('scoreValue').textContent = formatCompact(me.score);
-    $('weekLeft').textContent = `${weekDaysLeft()} يوم على إغلاق الدوري`;
+    $('weekLeft').textContent = `${counted(weekDaysLeft(), ['يوم واحد', 'يومان', 'أيام', 'يوماً'])} على إغلاق الدوري`;
 
     const board = challengeBoard(state);
     $('challengeList').innerHTML = board
@@ -586,6 +1083,8 @@ export function mount(store) {
         ${plot.level >= ECONOMY.maxLevel ? 'أعلى مستوى' : `ترقية إلى المستوى ${plot.level + 1} · ${formatNumber(upgrade)}`}
       </button>
       <button type="button" class="btn btn-danger" data-action="sell">بيع القطعة</button>
+      ${renderOfferBlock(plot, district, state)}
+      ${renderLeaseBlock(plot, district, state)}
       ${renderPlotHistory(key, state)}`;
   }
 
@@ -741,7 +1240,7 @@ export function mount(store) {
   }
 
   document.addEventListener('click', (event) => {
-    const target = event.target.closest('[data-view],[data-district],[data-plot],[data-claim],[data-action],[data-filter],[data-ledger],#collectAll,#settingsBtn,#sheetClose,#settingsClose,#saveName,#hapticsToggle,#resetGame,#scrim');
+    const target = event.target.closest('[data-view],[data-district],[data-plot],[data-claim],[data-action],[data-filter],[data-ledger],#collectAll,#settingsBtn,#sheetClose,#settingsClose,#saveName,#hapticsToggle,#resetGame,#scrim,#exportCsv,#healthCheck');
     if (!target) return;
 
     if (target.dataset.view) return switchView(target.dataset.view);
@@ -756,6 +1255,18 @@ export function mount(store) {
       view.filter = target.dataset.filter;
       vibrate(6);
       return render();
+    }
+
+    if (target.dataset.action === 'open-account') return openSettings();
+    if (target.dataset.action === 'accept-offer') return handleAcceptOffer(target.dataset.offer);
+    if (target.dataset.action === 'cancel-offer') {
+      return act(store.dispatch('cancelOffer', { offerId: target.dataset.offer }), 10);
+    }
+    if (target.dataset.action === 'list-offer') return handleListOffer();
+    if (target.dataset.action === 'accept-lease') return handleAcceptLease(target.dataset.offer);
+    if (target.dataset.action === 'list-lease') return handleListLease();
+    if (target.dataset.action === 'collect-lease') {
+      return act(store.dispatch('collectLease', { plotId: target.dataset.plot }), 18);
     }
 
     if (target.dataset.action?.startsWith('zoom-')) {
@@ -801,6 +1312,21 @@ export function mount(store) {
     }
 
     if (target.id === 'hapticsToggle') return act(store.dispatch('toggleHaptics'));
+    if (target.id === 'exportCsv') return exportLedgerCsv();
+    if (target.id === 'healthCheck') {
+      const button = target;
+      button.disabled = true;
+      button.textContent = 'جارٍ الفحص…';
+      return act(
+        store.checkServer().then((result) => {
+          button.textContent = 'افحص الاتصال الآن';
+          render();
+          return result.ok
+            ? { ok: true, message: `الخادم يرد في ${store.health.roundTripMs ?? 0}ms — المخطط يعمل.` }
+            : result;
+        })
+      );
+    }
 
     if (target.id === 'resetGame') {
       if (!resetArmed) {
@@ -863,6 +1389,16 @@ export function mount(store) {
   $('authSignOut')?.addEventListener('click', () =>
     runAuth($('authSignOut'), () => store.auth.signOut(), 'جارٍ…')
   );
+
+  document.addEventListener('input', (event) => {
+    const id = event.target?.id;
+    if (id !== 'offerPrice' && id !== 'leaseFee') return;
+    const node = $(id === 'offerPrice' ? 'offerNet' : 'leaseNet');
+    if (!node) return;
+    const value = Number(event.target.value);
+    node.textContent =
+      Number.isFinite(value) && value > 0 ? `صافي لك بعد العمولة: ${formatNumber(offerProceeds(value))}` : '';
+  });
 
   const searchInput = $('citySearch');
   if (searchInput) {

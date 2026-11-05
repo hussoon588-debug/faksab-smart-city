@@ -150,6 +150,14 @@ export function createSupabaseBackend({
 
   return {
     mode: 'supabase',
+    /** Host only — the key never leaves the client, and the screen never prints it. */
+    get endpoint() {
+      try {
+        return new URL(url).host;
+      } catch {
+        return '';
+      }
+    },
     get signedIn() {
       return Boolean(session?.access_token);
     },
@@ -201,7 +209,32 @@ export function createSupabaseBackend({
     collectRent: ({ plotId, idempotencyKey }) => guarded('ofuq_collect_rent', { p_plot: plotId, p_idempotency: idempotencyKey }),
     sellPlot: ({ plotId, idempotencyKey }) => guarded('ofuq_sell_plot', { p_plot: plotId, p_idempotency: idempotencyKey }),
     claimMission: ({ missionId, idempotencyKey }) =>
-      guarded('ofuq_claim_mission', { p_mission: missionId, p_idempotency: idempotencyKey })
+      guarded('ofuq_claim_mission', { p_mission: missionId, p_idempotency: idempotencyKey }),
+
+    // The market is players-only: every offer below belongs to a real account.
+    listOffer: ({ plotId, price, hours = 48, idempotencyKey }) =>
+      guarded('ofuq_list_offer', {
+        p_plot: plotId,
+        p_price: Math.round(Number(price) || 0),
+        p_hours: Math.round(Number(hours) || 48),
+        p_idempotency: idempotencyKey
+      }),
+    cancelOffer: ({ offerId, idempotencyKey }) =>
+      guarded('ofuq_cancel_offer', { p_offer: offerId, p_idempotency: idempotencyKey }),
+    acceptOffer: ({ offerId, idempotencyKey }) =>
+      guarded('ofuq_accept_offer', { p_offer: offerId, p_idempotency: idempotencyKey }),
+
+    // Leasing rents out the income, not the plot: the owner keeps the deed throughout.
+    listLease: ({ plotId, fee, hours = 24, windowHours = 48, idempotencyKey }) =>
+      guarded('ofuq_list_lease', {
+        p_plot: plotId,
+        p_fee: Math.round(Number(fee) || 0),
+        p_hours: Math.round(Number(hours) || 24),
+        p_window: Math.round(Number(windowHours) || 48),
+        p_idempotency: idempotencyKey
+      }),
+    acceptLease: ({ offerId, idempotencyKey }) =>
+      guarded('ofuq_accept_lease', { p_offer: offerId, p_idempotency: idempotencyKey })
   };
 }
 
@@ -244,6 +277,47 @@ export function snapshotToState(snapshot, previous = {}) {
         .sort((a, b) => b.ts - a.ts || b.seq - a.seq)
         .slice(0, 400)
     : previous.ledger ?? [];
+  const offers = (Array.isArray(snapshot.offers) ? snapshot.offers : []).map((offer) => ({
+    id: String(offer.id),
+    plotId: String(offer.plotId),
+    districtId: offer.districtId,
+    plotNo: Number(offer.plotNo),
+    assetId: offer.assetId ?? null,
+    level: Number(offer.level ?? 0),
+    sellerId: String(offer.sellerId ?? ''),
+    sellerName: offer.sellerName ?? '',
+    price: Number(offer.price ?? 0),
+    fee: Number(offer.fee ?? 0),
+    kind: offer.kind === 'lease' ? 'lease' : 'sale',
+    hours: offer.hours === null || offer.hours === undefined ? null : Number(offer.hours),
+    value: Number(offer.value ?? 0),
+    expiresAt: Date.parse(offer.expiresAt ?? '') || 0,
+    createdAt: Date.parse(offer.createdAt ?? '') || 0,
+    mine: Boolean(offer.mine)
+  }));
+
+  // Active leases the player is part of — as the owner who rented it out, or the tenant.
+  // The rent and the collection clock come from the server so the wallet and the plot agree.
+  const leases = (Array.isArray(snapshot.leases) ? snapshot.leases : []).map((lease) => ({
+    id: String(lease.id),
+    plotId: String(lease.plotId),
+    districtId: lease.districtId,
+    plotNo: Number(lease.plotNo),
+    assetId: lease.assetId ?? null,
+    level: Number(lease.level ?? 0),
+    rent: Number(lease.rent ?? 0),
+    fee: Number(lease.fee ?? 0),
+    lessorId: String(lease.lessorId ?? ''),
+    lessorName: lease.lessorName ?? '',
+    lesseeId: String(lease.lesseeId ?? ''),
+    lesseeName: lease.lesseeName ?? '',
+    startsAt: Date.parse(lease.startsAt ?? '') || 0,
+    endsAt: Date.parse(lease.endsAt ?? '') || 0,
+    lastCollectedAt: Date.parse(lease.lastCollectedAt ?? '') || 0,
+    tenant: Boolean(lease.tenant),
+    owner: Boolean(lease.owner)
+  }));
+
   return {
     ...previous,
     playerName: snapshot.player?.name ?? previous.playerName,
@@ -251,6 +325,8 @@ export function snapshotToState(snapshot, previous = {}) {
     xp: Number(snapshot.player?.xp ?? 0),
     plots,
     ledger,
+    offers,
+    leases,
     ledgerSeq: Number(snapshot.ledgerSeq ?? ledger[0]?.seq ?? previous.ledgerSeq ?? 0),
     claims: snapshot.week ? { [snapshot.week]: [...(snapshot.claims ?? [])] } : previous.claims ?? {},
     week: {

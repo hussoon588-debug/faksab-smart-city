@@ -24,7 +24,7 @@
       <img class="brand-mark" src="assets/icon-192.png" width="40" height="40" alt="" decoding="async">
       <span class="brand-text">
         <b class="brand-ar">أفق</b>
-        <span class="brand-en">OFUQ</span>
+        <span class="brand-en">OFUQ · <span id="buildVersion">—</span></span>
       </span>
     </div>
     <button class="icon-btn" id="settingsBtn" type="button" aria-label="الإعدادات">
@@ -61,6 +61,10 @@
     <button class="tab is-active" type="button" role="tab" aria-selected="true" aria-controls="view-city" data-view="city">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9l6-4v16M9 21V3l6 4v14M15 21v-8l6-3v11"/></svg>
       <span>المدينة</span>
+    </button>
+    <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="view-market" data-view="market">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h18M5 9V6h14v3M6 9v11h12V9"/><path d="M9 13h6"/></svg>
+      <span>السوق</span>
     </button>
     <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="view-portfolio" data-view="portfolio">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
@@ -118,6 +122,37 @@
       </div>
     </section>
 
+    <section class="view" id="view-market" role="tabpanel" aria-label="السوق" hidden>
+      <div class="card">
+        <div class="card-head">
+          <h2>سوق اللاعبين</h2>
+          <span class="pill" id="marketCount">—</span>
+        </div>
+        <p class="meta" id="marketNote">—</p>
+        <div class="market" id="marketList"></div>
+        <p class="empty" id="marketEmpty" hidden>لا توجد عروض مفتوحة الآن.</p>
+        <div class="market-gate" id="marketGate" hidden>
+          <p>السوق بين اللاعبين يحتاج جلسة خادم — لا نعرض عروضاً وهمية.</p>
+          <button class="btn btn-gold" type="button" data-action="open-account">فتح لوحة الحساب</button>
+        </div>
+        <p class="fineprint">كل عرض هنا لقطعة حقيقية يملكها لاعب حقيقي. العمولة ٤٪ تُخصم من البائع وتظهر سطراً مستقلاً في دفتره.</p>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <h2>للإيجار</h2>
+          <span class="pill" id="leaseCount">—</span>
+        </div>
+        <p class="meta" id="leaseNote">—</p>
+        <div class="market" id="leaseList"></div>
+        <p class="empty" id="leaseEmpty" hidden>لا أحد يؤجّر الآن — اعرض دخل أصلك للإيجار من لوحة القطعة.</p>
+        <div class="market-gate" id="leaseGate" hidden>
+          <p>تأجير دخل أصل يحتاج جلسة خادم — الإيجار بين لاعبين حقيقيين فقط.</p>
+          <button class="btn btn-gold" type="button" data-action="open-account">فتح لوحة الحساب</button>
+        </div>
+        <p class="fineprint">المستأجر يدفع المبلغ مقدماً ويجمع إيجار الأصل حتى نهاية المدة، ثم يعود الدخل للمالك. الملكية لا تنتقل أبداً، والإيجار المتراكم قبل التسليم يُسوّى للمالك.</p>
+      </div>
+    </section>
+
     <section class="view" id="view-portfolio" role="tabpanel" aria-label="المحفظة" hidden>
       <div class="card">
         <div class="card-head"><h2>ملخص المحفظة</h2></div>
@@ -133,6 +168,14 @@
         <div class="assets" id="assetList"></div>
         <p class="empty" id="emptyPortfolio" hidden>لا توجد أصول بعد. ابدأ بشراء قطعة من تبويب المدينة.</p>
       </div>
+      <div class="card" id="leaseCard" hidden>
+        <div class="card-head">
+          <h2>إيجاراتي</h2>
+          <span class="pill" id="myLeaseCount">—</span>
+        </div>
+        <div class="market" id="myLeaseList"></div>
+        <p class="fineprint">الأصل المستأجر يظهر هنا مع إيجاره المتراكم: اجمعه قبل انتهاء المدة. المالك استلم المبلغ مقدماً ولا يجمع أثناء الإيجار.</p>
+      </div>
       <div class="card">
         <div class="card-head">
           <h2>سجل الحركات</h2>
@@ -141,7 +184,10 @@
         <div class="chip-row" id="ledgerFilters" role="group" aria-label="تصفية الحركات"></div>
         <div class="ledger" id="ledgerList"></div>
         <p class="empty" id="ledgerEmpty" hidden>لا توجد حركات بعد.</p>
-        <p class="fineprint">كل حركة في هذا السجل تحمل سببها والرصيد بعدها — مجموعها يفسّر رصيدك بالكامل.</p>
+        <div class="row gap">
+          <button class="btn btn-ghost sm" type="button" id="exportCsv">تصدير الحركات CSV</button>
+        </div>
+        <p class="fineprint">كل حركة في هذا السجل تحمل سببها والرصيد بعدها — مجموعها يفسّر رصيدك بالكامل. التصدير ينسخ نفس السطور بلا إضافات.</p>
       </div>
     </section>
 
@@ -159,6 +205,26 @@
           </div>
         </div>
         <div class="challenges" id="challengeList"></div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <h2>تقرير الأسبوع</h2>
+          <span class="pill" id="reportKey">—</span>
+        </div>
+        <div class="kpis">
+          <div class="kpi"><b id="rpIncome">—</b><span>دخل الأسبوع</span></div>
+          <div class="kpi"><b id="rpSpend">—</b><span>مصروف</span></div>
+          <div class="kpi"><b id="rpNet">—</b><span>الصافي</span></div>
+        </div>
+        <div class="chart" id="rpChart" aria-hidden="true"></div>
+        <p class="meta" id="rpNote">—</p>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <h2>الإنجازات</h2>
+          <span class="pill" id="achievementCount">—</span>
+        </div>
+        <div class="achievements" id="achievementList"></div>
       </div>
       <div class="card">
         <div class="card-head"><h2>الترتيب</h2></div>
@@ -228,6 +294,13 @@
           <button class="btn btn-ghost sm" type="button" id="authSignOut">خروج</button>
         </span>
       </div>
+    </section>
+    <section class="account" aria-labelledby="healthTitle">
+      <h3 id="healthTitle">جاهزية المدينة المشتركة</h3>
+      <p class="meta" id="healthState">—</p>
+      <div class="health" id="healthList"></div>
+      <button class="btn btn-ghost sm" type="button" id="healthCheck">افحص الاتصال الآن</button>
+      <p class="fineprint">كل بند هنا نتيجة قياس فعلي، لا تقدير: الفحص يقوم برحلة ذهاب وعودة حقيقية إلى الخادم.</p>
     </section>
     <div class="row">
       <span>الاهتزاز عند التفاعل</span>
