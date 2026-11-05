@@ -334,3 +334,62 @@ export function groupLedger(entries = [], now = Date.now()) {
   }
   return [...groups.values()];
 }
+
+/* ------------------------------------------------------------------ market --- */
+
+/**
+ * The market is between players only — there is no simulated counterparty, so every
+ * helper here is about *real* offers: their fee, their clock, and whether they are live.
+ */
+export const marketFee = (price) => Math.round(Math.max(0, Number(price) || 0) * ECONOMY.market.feeRate);
+
+/** What the seller actually receives after the market fee. */
+export const offerProceeds = (price) => Math.max(0, Math.round(Number(price) || 0) - marketFee(price));
+
+export const offerRemainingMs = (offer, now = Date.now()) =>
+  Math.max(0, Number(offer?.expiresAt ?? 0) - now);
+
+export const isOfferLive = (offer, now = Date.now()) => offerRemainingMs(offer, now) > 0;
+
+/** "٣ ساعات" / "٤٥ دقيقة" — a countdown the player can act on, not a timestamp. */
+export function formatRemaining(ms) {
+  const minutes = Math.floor(Math.max(0, ms) / 60000);
+  if (minutes <= 0) return 'انتهى';
+  if (minutes < 60) return `${minutes} دقيقة`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest === 0 ? `${hours} ساعة` : `${hours} ساعة و${rest} دقيقة`;
+}
+
+/** Price sanity for the seller's form; the server enforces the same bounds. */
+export function validateOfferPrice(rawPrice, plot, district) {
+  const price = Math.round(Number(rawPrice));
+  const { minPrice, maxPrice } = ECONOMY.market;
+  if (!Number.isFinite(price)) return { ok: false, error: 'أدخل سعراً صحيحاً.' };
+  if (price < minPrice) return { ok: false, error: `أقل سعر مسموح ${minPrice} عملة.` };
+  if (price > maxPrice) return { ok: false, error: 'السعر أعلى من الحد المسموح.' };
+  const value = plot && district ? plotValue(plot, district) : 0;
+  return {
+    ok: true,
+    value,
+    price,
+    net: offerProceeds(price),
+    fee: marketFee(price),
+    // Not an error: selling far below value is allowed, but the sheet says so first.
+    belowValue: value > 0 && price < Math.round(value * 0.85)
+  };
+}
+
+/** Board summary for the market header. */
+export function marketSummary(offers = [], now = Date.now()) {
+  const live = offers.filter((offer) => isOfferLive(offer, now));
+  return {
+    open: live.length,
+    mine: live.filter((offer) => offer.mine).length,
+    cheapest: live.reduce((best, offer) => (best === null || offer.price < best ? offer.price : best), null)
+  };
+}
+
+/** Live offers for a plot the player owns (so the sheet can show "already listed"). */
+export const offerForPlot = (offers = [], plotId, now = Date.now()) =>
+  offers.find((offer) => offer.plotId === plotId && isOfferLive(offer, now)) ?? null;

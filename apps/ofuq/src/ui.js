@@ -13,10 +13,16 @@ import {
   districtStats,
   formatCompact,
   formatNumber,
+  formatRemaining,
   groupLedger,
   ledgerLabel,
   ledgerReconciles,
   ledgerTotals,
+  marketFee,
+  marketSummary,
+  offerForPlot,
+  offerProceeds,
+  offerRemainingMs,
   plotLedger,
   hourlyIncome,
   leaderboard,
@@ -24,6 +30,7 @@ import {
   netYield,
   pendingRent,
   plotKey,
+  validateOfferPrice,
   plotPrice,
   plotRent,
   plotValue,
@@ -66,6 +73,7 @@ export function mount(store) {
     // City view: `city` is the WebGL scene once (and only if) it exists.
     filter: 'all',
     ledgerFilter: 'all',
+    confirmOffer: null,
     city: null,
     cityStatus: 'idle',
     cityModel: null
@@ -73,6 +81,7 @@ export function mount(store) {
   let toastTimer = 0;
   let searchTimer = 0;
   let authBusy = false;
+  let confirmTimer = 0;
   let resetArmed = false;
 
   /* --------------------------------------------------------------- helpers */
@@ -112,6 +121,7 @@ export function mount(store) {
     renderCityMap(snap);
     renderPortfolio(snap);
     renderLedger(snap);
+    renderMarket(snap);
     renderLeague(snap);
     if (view.sheetKey) renderSheet(snap);
     renderSettingsState();
@@ -449,6 +459,153 @@ export function mount(store) {
     list.append(verdict);
   }
 
+  /* ---------------------------------------------------------------- market --- */
+
+  const offerLabel = (offer) => `${offer.districtId === 'harbor' ? 'حي الميناء' : ''}`;
+
+  function marketRow(offer, now) {
+    const district = districtFor(offer.districtId);
+    const asset = assetFor(offer.assetId);
+    const remaining = formatRemaining(offerRemainingMs(offer, now));
+    const gap = offer.value > 0 ? Math.round(((offer.price - offer.value) / offer.value) * 100) : 0;
+    const gapLabel =
+      offer.value <= 0
+        ? ''
+        : gap <= -5
+          ? `<span class="good">أرخص ${Math.abs(gap)}% من القيمة</span>`
+          : gap >= 5
+            ? `<span class="bad">أغلى ${gap}% من القيمة</span>`
+            : '<span>بسعر القيمة تقريباً</span>';
+    const armed = view.confirmOffer === offer.id;
+
+    const action = offer.mine
+      ? `<button class="btn btn-ghost sm" type="button" data-action="cancel-offer" data-offer="${offer.id}">إلغاء العرض</button>`
+      : `<button class="btn ${armed ? 'btn-danger' : 'btn-gold'} sm" type="button" data-action="accept-offer" data-offer="${offer.id}">
+           ${armed ? `تأكيد الشراء بـ ${formatNumber(offer.price)}` : `شراء بـ ${formatNumber(offer.price)}`}
+         </button>`;
+
+    return `<article class="market-row">
+      <header>
+        <b>${escapeHtml(district?.name ?? '')} · قطعة ${offer.plotNo}</b>
+        <small>${offer.mine ? 'عرضك' : escapeHtml(offer.sellerName || 'لاعب')}</small>
+      </header>
+      <div class="market-meta">
+        <span><b>${formatNumber(offer.price)}</b> عملة</span>
+        <span>${escapeHtml(asset?.name ?? 'أرض')}${offer.level ? ` · مستوى ${offer.level}` : ''}</span>
+        ${gapLabel}
+        <span>ينتهي بعد ${escapeHtml(remaining)}</span>
+      </div>
+      <div class="market-actions">${action}</div>
+    </article>`;
+  }
+
+  function renderMarket(snap) {
+    const { state } = snap;
+    const list = $('marketList');
+    const gate = $('marketGate');
+    const empty = $('marketEmpty');
+    const note = $('marketNote');
+    if (!list || !gate || !empty) return;
+
+    const offers = Array.isArray(state.offers) ? state.offers : [];
+    const summary = marketSummary(offers, Date.now());
+    $('marketCount').textContent =
+      summary.open === 0 ? 'لا عروض' : `${summary.open} عرض · أرخص ${formatCompact(summary.cheapest)}`;
+
+    if (!store.auth.available) {
+      note.textContent = 'هذه النسخة تعمل محلياً: لا يوجد لاعبون آخرون، ولا نلفّق عروضاً من عندنا.';
+      gate.hidden = false;
+      list.innerHTML = '';
+      empty.hidden = true;
+      return;
+    }
+
+    if (!store.auth.signedIn) {
+      note.textContent = 'سجّل الدخول لعرض السوق وشراء قطع اللاعبين.';
+      gate.hidden = false;
+      list.innerHTML = '';
+      empty.hidden = true;
+      return;
+    }
+
+    gate.hidden = true;
+    note.textContent =
+      summary.mine > 0
+        ? `لديك ${summary.mine} عرض مفتوح. العمولة ٤٪ تُخصم من البائع عند البيع.`
+        : 'اختر قطعة من المحفظة ثم «نشر في السوق» لعرضها على اللاعبين.';
+    empty.hidden = offers.length > 0;
+    list.innerHTML = offers.map((offer) => marketRow(offer, Date.now())).join('');
+  }
+
+  /** A purchase is irreversible, so the first tap only arms the button. */
+  function handleAcceptOffer(offerId) {
+    const offer = (store.state.offers ?? []).find((item) => item.id === offerId);
+    if (!offer) return act({ ok: false, message: 'هذا العرض لم يعد متاحاً.' });
+    if (view.confirmOffer !== offerId) {
+      view.confirmOffer = offerId;
+      clearTimeout(confirmTimer);
+      confirmTimer = setTimeout(() => {
+        view.confirmOffer = null;
+        render();
+      }, 6000);
+      render();
+      return toast(`اضغط مرة أخرى لتأكيد شراء قطعة ${offer.plotNo} بـ ${formatNumber(offer.price)}.`);
+    }
+    view.confirmOffer = null;
+    clearTimeout(confirmTimer);
+    return act(store.dispatch('acceptOffer', { offerId }), 20);
+  }
+
+  function handleListOffer() {
+    const key = view.sheetKey;
+    const plot = store.state.plots[key];
+    const input = $('offerPrice');
+    if (!plot || !input) return act({ ok: false, message: 'لا توجد قطعة لعرضها.' });
+    const district = districtFor(plot.districtId);
+    const check = validateOfferPrice(input.value, plot, district);
+    if (!check.ok) return act(check);
+    if (check.belowValue && view.offerArmed !== key) {
+      view.offerArmed = key;
+      return act({
+        ok: false,
+        message: `السعر أقل من القيمة الدفترية (${formatNumber(check.value)}). اضغط «نشر في السوق» مرة أخرى للتأكيد.`
+      });
+    }
+    view.offerArmed = null;
+    return act(store.dispatch('listOffer', { plotKey: key, price: check.price }), 16);
+  }
+
+  /**
+   * Selling to the city is instant; selling to a player needs a price and a session.
+   * The block never appears in local mode — no fake market, no disabled mystery button.
+   */
+  function renderOfferBlock(plot, district, state) {
+    const offer = offerForPlot(state.offers ?? [], plot.id ?? null);
+    if (offer) {
+      return `<div class="offer-live">
+        <b>معروض في السوق بـ ${formatNumber(offer.price)}</b>
+        <small>ينتهي بعد ${formatRemaining(offerRemainingMs(offer))} · صافيك بعد العمولة ${formatNumber(offerProceeds(offer.price))}</small>
+        <button class="btn btn-ghost sm" type="button" data-action="cancel-offer" data-offer="${offer.id}">إلغاء العرض</button>
+      </div>`;
+    }
+    if (!store.auth.available) {
+      return `<div class="offer-live"><small>عرض القطع على لاعبين آخرين يحتاج خادماً مُهيّأً — البيع الفوري أعلاه يعمل دائماً.</small></div>`;
+    }
+    if (!store.auth.signedIn) {
+      return `<div class="offer-live"><small>سجّل الدخول لعرض هذه القطعة على بقية اللاعبين.</small></div>`;
+    }
+    const suggested = plotValue(plot, district);
+    return `<div class="offer-form">
+      <label>
+        <span>اعرضها في السوق بسعر (١٠٠ عملة كحد أدنى)</span>
+        <input id="offerPrice" type="number" inputmode="numeric" min="${ECONOMY.market.minPrice}" step="50" value="${suggested}">
+      </label>
+      <small id="offerNet">صافي لك بعد العمولة: ${formatNumber(offerProceeds(suggested))}</small>
+      <button class="btn btn-gold" type="button" data-action="list-offer">نشر في السوق</button>
+      <small class="fineprint">العمولة ${Math.round(ECONOMY.market.feeRate * 100)}% تُخصم من البائع وتظهر سطراً مستقلاً في دفتره.</small>
+    </div>`;
+  }
+
   function renderPlotHistory(key, state) {
     const entries = plotLedger(Array.isArray(state.ledger) ? state.ledger : [], key).slice(0, 4);
     if (entries.length === 0) return '';
@@ -586,6 +743,7 @@ export function mount(store) {
         ${plot.level >= ECONOMY.maxLevel ? 'أعلى مستوى' : `ترقية إلى المستوى ${plot.level + 1} · ${formatNumber(upgrade)}`}
       </button>
       <button type="button" class="btn btn-danger" data-action="sell">بيع القطعة</button>
+      ${renderOfferBlock(plot, district, state)}
       ${renderPlotHistory(key, state)}`;
   }
 
@@ -758,6 +916,13 @@ export function mount(store) {
       return render();
     }
 
+    if (target.dataset.action === 'open-account') return openSettings();
+    if (target.dataset.action === 'accept-offer') return handleAcceptOffer(target.dataset.offer);
+    if (target.dataset.action === 'cancel-offer') {
+      return act(store.dispatch('cancelOffer', { offerId: target.dataset.offer }), 10);
+    }
+    if (target.dataset.action === 'list-offer') return handleListOffer();
+
     if (target.dataset.action?.startsWith('zoom-')) {
       const zoom = { 'zoom-in': 'zoomIn', 'zoom-out': 'zoomOut', 'zoom-reset': 'reset' }[target.dataset.action];
       view.city?.[zoom]?.();
@@ -863,6 +1028,17 @@ export function mount(store) {
   $('authSignOut')?.addEventListener('click', () =>
     runAuth($('authSignOut'), () => store.auth.signOut(), 'جارٍ…')
   );
+
+  document.addEventListener('input', (event) => {
+    if (event.target?.id !== 'offerPrice') return;
+    const node = $('offerNet');
+    if (!node) return;
+    const price = Number(event.target.value);
+    node.textContent =
+      Number.isFinite(price) && price > 0
+        ? `صافي لك بعد العمولة: ${formatNumber(offerProceeds(price))}`
+        : '';
+  });
 
   const searchInput = $('citySearch');
   if (searchInput) {

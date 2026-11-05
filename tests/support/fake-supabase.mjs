@@ -30,11 +30,13 @@ function createFakeSupabase({ clock = { now: Date.UTC(2026, 10, 5, 9) } } = {}) 
   const tokens = new Map(); // token -> email
   const accounts = new Map(); // email -> { balance, xp, plots, claims, ledger:Set (idempotency), rows:[] (money) }
   const plots = new Map(); // key -> { id, districtId, plotNo, owner, assetId, level, lastCollectedAt }
+  const offers = new Map(); // id -> { id, plotId, sellerId, price, createdAt, expiresAt, status, buyerId }
   let calls = 0;
+  let offerSeq = 0;
 
   const accountFor = (email) => {
     if (!accounts.has(email)) {
-      accounts.set(email, { balance: 12000, xp: 0, plots: new Set(), claims: new Set(), ledger: new Set(), rows: [] });
+      accounts.set(email, { balance: 12000, xp: 0, plots: new Set(), claims: new Set(), ledger: new Set(), requests: new Set(), rows: [] });
     }
     return accounts.get(email);
   };
@@ -53,6 +55,44 @@ function createFakeSupabase({ clock = { now: Date.UTC(2026, 10, 5, 9) } } = {}) 
         lastCollectedAt: null
       });
     }
+  }
+
+  const plotById = (id) => [...plots.values()].find((candidate) => candidate.id === id) ?? null;
+
+  const plotValueOf = (plot) =>
+    plot.assetId
+      ? plot.price + Math.round(ASSETS[plot.assetId].cost * (1 + 0.35 * (plot.level - 1)) * 0.9)
+      : plot.price;
+
+  function expireOffers() {
+    for (const offer of offers.values()) {
+      if (offer.status === 'open' && offer.expiresAt <= clock.now) offer.status = 'expired';
+    }
+  }
+
+  function liveOffers(email) {
+    expireOffers();
+    return [...offers.values()]
+      .filter((offer) => offer.status === 'open')
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .map((offer) => {
+        const plot = plotById(offer.plotId);
+        return {
+          id: offer.id,
+          plotId: offer.plotId,
+          districtId: plot.districtId,
+          plotNo: plot.plotNo,
+          assetId: plot.assetId,
+          level: plot.level,
+          sellerId: `user-${offer.sellerId}`,
+          sellerName: offer.sellerId.split('@')[0],
+          price: offer.price,
+          value: plotValueOf(plot),
+          expiresAt: new Date(offer.expiresAt).toISOString(),
+          createdAt: new Date(offer.createdAt).toISOString(),
+          mine: offer.sellerId === email
+        };
+      });
   }
 
   function snapshot(email) {
@@ -75,6 +115,7 @@ function createFakeSupabase({ clock = { now: Date.UTC(2026, 10, 5, 9) } } = {}) 
       })),
       weekly: { bought: 0, developed: 0, upgraded: 0, collected: 0 },
       claims: [...account.claims],
+      offers: liveOffers(email),
       ledger: account.rows.slice(0, 100).map((row, index) => ({ ...row, seq: index }))
     };
   }
@@ -193,6 +234,85 @@ function createFakeSupabase({ clock = { now: Date.UTC(2026, 10, 5, 9) } } = {}) 
       plot.lastCollectedAt = null;
       account.plots.delete(`${plot.districtId}:${plot.plotNo}`);
       account.xp += 50;
+      return snapshot(email);
+    },
+
+    ofuq_list_offer: (email, { p_plot, p_price, p_hours, p_idempotency }) => {
+      const account = accountFor(email);
+      if (p_idempotency && account.requests.has(p_idempotency)) return snapshot(email);
+      expireOffers();
+      const plot = plotById(p_plot);
+      if (!plot) throw new Error('القطعة غير موجودة');
+      if (plot.owner !== email) throw new Error('هذه القطعة ليست لك');
+      if (!plot.assetId) throw new Error('طوّر القطعة قبل عرضها للبيع');
+      const price = Math.round(Number(p_price) || 0);
+      if (price < 100) throw new Error('أقل سعر مسموح 100 عملة');
+      if (price > 100000000) throw new Error('السعر أعلى من الحد المسموح');
+      const hours = Math.min(168, Math.max(1, Math.round(Number(p_hours) || 48)));
+      for (const offer of offers.values()) {
+        if (offer.plotId === p_plot && offer.status === 'open') offer.status = 'cancelled';
+      }
+      offerSeq += 1;
+      const id = `offer-${offerSeq}`;
+      offers.set(id, {
+        id,
+        plotId: p_plot,
+        sellerId: email,
+        price,
+        createdAt: clock.now,
+        expiresAt: clock.now + hours * HOUR,
+        status: 'open',
+        buyerId: null
+      });
+      if (p_idempotency) account.requests.add(p_idempotency);
+      return snapshot(email);
+    },
+
+    ofuq_cancel_offer: (email, { p_offer, p_idempotency }) => {
+      const account = accountFor(email);
+      if (p_idempotency && account.requests.has(p_idempotency)) return snapshot(email);
+      const offer = offers.get(p_offer);
+      if (!offer) throw new Error('العرض غير موجود');
+      if (offer.sellerId !== email) throw new Error('هذا العرض ليس لك');
+      expireOffers();
+      if (offer.status !== 'open') throw new Error('العرض لم يعد مفتوحاً');
+      offer.status = 'cancelled';
+      if (p_idempotency) account.requests.add(p_idempotency);
+      return snapshot(email);
+    },
+
+    ofuq_accept_offer: (email, { p_offer, p_idempotency }) => {
+      const buyer = accountFor(email);
+      if (p_idempotency && buyer.requests.has(p_idempotency)) return snapshot(email);
+      expireOffers();
+      const offer = offers.get(p_offer);
+      if (!offer) throw new Error('العرض غير موجود');
+      if (offer.status !== 'open') throw new Error('العرض لم يعد متاحاً');
+      if (offer.sellerId === email) throw new Error('لا يمكنك قبول عرضك');
+      const plot = plotById(offer.plotId);
+      if (plot.owner !== offer.sellerId) throw new Error('العرض غير صالح — تغيّرت ملكية القطعة');
+
+      const seller = accountFor(offer.sellerId);
+      const key = `${plot.districtId}:${plot.plotNo}`;
+      const fee = Math.round(offer.price * 0.04);
+
+      // Buyer pays in full; the seller is credited and charged as two separate rows.
+      if (spend(buyer, email, p_idempotency && `${p_idempotency}:buy`, -offer.price, 'plot_purchase', key).replayed) {
+        return snapshot(email);
+      }
+      spend(seller, offer.sellerId, null, offer.price, 'sale', key);
+      spend(seller, offer.sellerId, null, -fee, 'market_fee', key);
+
+      plot.owner = email;
+      plot.lastCollectedAt = clock.now;
+      seller.plots.delete(key);
+      buyer.plots.add(key);
+      buyer.xp += 40;
+      seller.xp += 50;
+
+      offer.status = 'accepted';
+      offer.buyerId = email;
+      if (p_idempotency) buyer.requests.add(p_idempotency);
       return snapshot(email);
     },
 

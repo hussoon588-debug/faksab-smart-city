@@ -201,7 +201,20 @@ export function createSupabaseBackend({
     collectRent: ({ plotId, idempotencyKey }) => guarded('ofuq_collect_rent', { p_plot: plotId, p_idempotency: idempotencyKey }),
     sellPlot: ({ plotId, idempotencyKey }) => guarded('ofuq_sell_plot', { p_plot: plotId, p_idempotency: idempotencyKey }),
     claimMission: ({ missionId, idempotencyKey }) =>
-      guarded('ofuq_claim_mission', { p_mission: missionId, p_idempotency: idempotencyKey })
+      guarded('ofuq_claim_mission', { p_mission: missionId, p_idempotency: idempotencyKey }),
+
+    // The market is players-only: every offer below belongs to a real account.
+    listOffer: ({ plotId, price, hours = 48, idempotencyKey }) =>
+      guarded('ofuq_list_offer', {
+        p_plot: plotId,
+        p_price: Math.round(Number(price) || 0),
+        p_hours: Math.round(Number(hours) || 48),
+        p_idempotency: idempotencyKey
+      }),
+    cancelOffer: ({ offerId, idempotencyKey }) =>
+      guarded('ofuq_cancel_offer', { p_offer: offerId, p_idempotency: idempotencyKey }),
+    acceptOffer: ({ offerId, idempotencyKey }) =>
+      guarded('ofuq_accept_offer', { p_offer: offerId, p_idempotency: idempotencyKey })
   };
 }
 
@@ -244,6 +257,22 @@ export function snapshotToState(snapshot, previous = {}) {
         .sort((a, b) => b.ts - a.ts || b.seq - a.seq)
         .slice(0, 400)
     : previous.ledger ?? [];
+  const offers = (Array.isArray(snapshot.offers) ? snapshot.offers : []).map((offer) => ({
+    id: String(offer.id),
+    plotId: String(offer.plotId),
+    districtId: offer.districtId,
+    plotNo: Number(offer.plotNo),
+    assetId: offer.assetId ?? null,
+    level: Number(offer.level ?? 0),
+    sellerId: String(offer.sellerId ?? ''),
+    sellerName: offer.sellerName ?? '',
+    price: Number(offer.price ?? 0),
+    value: Number(offer.value ?? 0),
+    expiresAt: Date.parse(offer.expiresAt ?? '') || 0,
+    createdAt: Date.parse(offer.createdAt ?? '') || 0,
+    mine: Boolean(offer.mine)
+  }));
+
   return {
     ...previous,
     playerName: snapshot.player?.name ?? previous.playerName,
@@ -251,6 +280,7 @@ export function snapshotToState(snapshot, previous = {}) {
     xp: Number(snapshot.player?.xp ?? 0),
     plots,
     ledger,
+    offers,
     ledgerSeq: Number(snapshot.ledgerSeq ?? ledger[0]?.seq ?? previous.ledgerSeq ?? 0),
     claims: snapshot.week ? { [snapshot.week]: [...(snapshot.claims ?? [])] } : previous.claims ?? {},
     week: {

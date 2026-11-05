@@ -61,6 +61,33 @@ The city is a 100-plot scene: five districts of twenty plots, positions derived 
 - The scene owns no game state: every frame is derived from a store snapshot, which is why
   local mode and server mode look identical.
 
+## The market (players only)
+
+Selling to the city is instant and always available. Selling **to another player** is a
+different product: a real listing, a real price and a real counterparty.
+
+- **No simulation.** In local mode the market tab shows a gate («السوق بين اللاعبين يحتاج جلسة
+  خادم») and the board stays empty. There is no generated seller, no fake offer, no button that
+  cannot work.
+- **Listing** happens from the plot sheet: a price (minimum 100), a 48-hour default clock, one
+  open offer per plot. The sheet shows the **net after the 4% fee** before publishing, and warns
+  when the price is more than 15% below book value.
+- **Accepting** takes two taps on purpose (arm → confirm), because it moves real balance.
+- **One transaction, three ledger rows**: the buyer is debited `plot_purchase`, the seller is
+  credited `sale` and charged `market_fee`. The plot keeps its asset and level; the rental clock
+  restarts at the transfer, so the buyer never inherits the seller's accrued rent.
+- **Expiry** is enforced server-side (`expires_at`), the board only lists live offers, and an
+  expired offer cannot be accepted.
+
+| RPC | What it guarantees |
+| --- | --- |
+| `ofuq_list_offer(plot, price, hours, key)` | ownership, developed plot, price bounds, one open offer per plot |
+| `ofuq_cancel_offer(offer, key)` | seller only, open only |
+| `ofuq_accept_offer(offer, key)` | not your own offer, live offer, unchanged ownership, sufficient balance, atomic transfer |
+
+Non-monetary actions are idempotent too: `ofuq_market_requests (player_id, request_key)` makes a
+retried `list`/`cancel`/`accept` a no-op that returns the current snapshot.
+
 ## The ledger
 
 Money is not a number that changes; it is the sum of movements. Every action that touches the
@@ -155,9 +182,10 @@ listing. Those are provider features that need a domain and an identity decision
 
 - Password reset, email confirmation, Google/Apple, MFA, account linking and session expiry UX.
 - Realtime presence or push of other players' actions (the map refreshes on request only).
-- Player-to-player market, rentals/offers, missions beyond `ofuq_missions` seeds, and the
-  admin console. The ledger already has `mission_reward`, `market_fee` and `admin_adjustment`
-  reasons so those flows can be added without a migration of history.
+- **Rentals** (lease an asset for a number of hours) — sale offers ship in 0.5.0, rentals do not.
+- Missions beyond the `ofuq_missions` seeds, and the admin console. The ledger already has
+  `mission_reward` and `admin_adjustment` reasons so those flows need no history migration.
+- A browser-side market in local mode: deliberately not built — see «The market» above.
 - The SQL has been validated by review and by the fake server, **not executed against a live
   Postgres** — no database is available in the build sandbox.
 

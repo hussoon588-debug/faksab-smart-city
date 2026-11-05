@@ -35,6 +35,8 @@ export function createInitialState(now = Date.now()) {
     xp: 0,
     plots: {},
     claims: {},
+    // The board is server-owned; locally it is always empty (no simulated sellers).
+    offers: [],
     // Append-only in spirit: newest first, capped, and every row explains one balance move.
     ledger: [
       {
@@ -67,6 +69,8 @@ export function migrate(raw, now = Date.now()) {
     xp: Math.max(0, num(raw.xp, 0)),
     plots: {},
     claims: {},
+    // The board is server-owned; locally it is always empty (no simulated sellers).
+    offers: [],
     week: { ...base.week, ...(typeof raw.week === 'object' && raw.week ? raw.week : {}) },
     stats: { ...base.stats, ...(typeof raw.stats === 'object' && raw.stats ? raw.stats : {}) },
     settings: { ...base.settings, ...(typeof raw.settings === 'object' && raw.settings ? raw.settings : {}) }
@@ -408,6 +412,8 @@ export function createStore({ storage = browserStorage(), now = () => Date.now()
     return true;
   }
 
+  const MARKET_LOCAL = { ok: false, message: 'السوق بين اللاعبين يحتاج جلسة خادم — سجّل الدخول أولاً.' };
+
   const localHandlers = {
     buy: ({ districtId, plotNo }) => actions.buy(districtId, plotNo),
     develop: ({ plotKey: key, assetId }) => actions.develop(key, assetId),
@@ -416,6 +422,9 @@ export function createStore({ storage = browserStorage(), now = () => Date.now()
     collectAll: () => actions.collectAll(),
     sell: ({ plotKey: key }) => actions.sell(key),
     claim: ({ challengeId }) => actions.claim(challengeId),
+    listOffer: () => MARKET_LOCAL,
+    cancelOffer: () => MARKET_LOCAL,
+    acceptOffer: () => MARKET_LOCAL,
     setName: ({ name }) => actions.setName(name),
     toggleHaptics: () => actions.toggleHaptics(),
     reset: () => actions.reset()
@@ -475,6 +484,34 @@ export function createStore({ storage = browserStorage(), now = () => Date.now()
           if (collected === 0) return { ok: false, message: 'لا يوجد إيجار جاهز للتحصيل.' };
           return { ok: true, message: `تم تحصيل ${(state.cash - before).toLocaleString(APP.numberLocale)} عملة.` };
         }
+        case 'listOffer': {
+          const plot = plotFor();
+          if (!plot?.id) return { ok: false, message: 'هذه القطعة غير مسجّلة على الخادم بعد.' };
+          if (!plot.assetId) return { ok: false, message: 'طوّر القطعة قبل عرضها للبيع.' };
+          const price = Math.round(Number(payload.price));
+          if (!Number.isFinite(price) || price < ECONOMY.market.minPrice) {
+            return { ok: false, message: `أقل سعر مسموح ${ECONOMY.market.minPrice} عملة.` };
+          }
+          result = await remote.listOffer({
+            plotId: plot.id,
+            price,
+            hours: payload.hours ?? ECONOMY.market.defaultHours,
+            idempotencyKey: payload.idempotencyKey ?? createIdempotencyKey('list')
+          });
+          break;
+        }
+        case 'cancelOffer':
+          result = await remote.cancelOffer({
+            offerId: payload.offerId,
+            idempotencyKey: payload.idempotencyKey ?? createIdempotencyKey('cancel')
+          });
+          break;
+        case 'acceptOffer':
+          result = await remote.acceptOffer({
+            offerId: payload.offerId,
+            idempotencyKey: payload.idempotencyKey ?? createIdempotencyKey('accept')
+          });
+          break;
         case 'claim':
           result = await remote.claimMission({
             missionId: payload.challengeId,
@@ -498,7 +535,10 @@ export function createStore({ storage = browserStorage(), now = () => Date.now()
         upgrade: 'تمت الترقية.',
         collect: `تم تحصيل ${gained.toLocaleString(APP.numberLocale)} عملة.`,
         sell: `تم البيع بـ ${gained.toLocaleString(APP.numberLocale)} عملة.`,
-        claim: `تم استلام مكافأة التحدي (${gained.toLocaleString(APP.numberLocale)} عملة).`
+        claim: `تم استلام مكافأة التحدي (${gained.toLocaleString(APP.numberLocale)} عملة).`,
+        listOffer: 'تم نشر العرض — أي لاعب في المدينة يمكنه قبوله الآن.',
+        cancelOffer: 'تم إلغاء العرض وعادت القطعة إلى محفظتك.',
+        acceptOffer: `تم شراء القطعة من لاعب آخر (−${Math.abs(gained).toLocaleString(APP.numberLocale)} عملة).`
       };
       return { ok: true, message: messages[type] ?? 'تم التنفيذ.' };
     } catch (error) {
