@@ -42,8 +42,11 @@ test('the fee and the seller’s net are the same numbers the database writes', 
 test('a countdown reads as time a player can act on', () => {
   assert.equal(formatRemaining(0), 'انتهى');
   assert.equal(formatRemaining(45 * 60 * 1000), '45 دقيقة');
-  assert.equal(formatRemaining(3 * HOUR), '3 ساعة');
-  assert.equal(formatRemaining(3 * HOUR + 45 * 60 * 1000), '3 ساعة و45 دقيقة');
+  assert.equal(formatRemaining(3 * HOUR), '3 ساعات');
+  assert.equal(formatRemaining(2 * HOUR), 'ساعتان');
+  assert.equal(formatRemaining(1 * 60 * 1000), 'دقيقة واحدة');
+  assert.equal(formatRemaining(3 * HOUR + 45 * 60 * 1000), '3 ساعات و45 دقيقة');
+  assert.equal(formatRemaining(20 * HOUR), '20 ساعة');
   assert.equal(offerRemainingMs({ expiresAt: Date.now() + 1000 }), 1001 - 1 > 0 ? offerRemainingMs({ expiresAt: Date.now() + 1000 }) : 0);
   assert.ok(offerRemainingMs({ expiresAt: 0 }) === 0);
 });

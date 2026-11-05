@@ -572,3 +572,22 @@ body::after {
   border-radius: 11px;
 }
 .offer-live { margin-top: 10px; padding: 10px; border: 1px solid var(--line); border-radius: 12px; font-size: 11px; color: var(--muted); display: grid; gap: 6px; }
+
+/* --------------------------------------------------------------- insights --- */
+.chart { display: flex; align-items: flex-end; gap: 6px; height: 74px; margin: 12px 0 6px; }
+.chart .bar { flex: 1; min-height: 3px; border-radius: 6px 6px 3px 3px; background: linear-gradient(180deg, var(--green), rgba(51, 224, 140, 0.35)); }
+.chart .bar.is-negative { background: linear-gradient(180deg, rgba(255, 92, 108, 0.85), rgba(255, 92, 108, 0.3)); border-radius: 3px 3px 6px 6px; }
+.chart .bar.is-empty { background: rgba(126, 232, 255, 0.12); }
+
+.achievements { display: grid; gap: 8px; }
+.achievement { display: grid; grid-template-columns: 30px 1fr auto; align-items: center; gap: 10px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 13px; }
+.achievement-ico { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 10px; font-size: 13px; background: rgba(126, 232, 255, 0.08); color: var(--muted); }
+.achievement.is-done .achievement-ico { background: linear-gradient(180deg, #ffe07a, var(--gold-2)); color: #10203c; }
+.achievement-main { display: grid; gap: 4px; min-width: 0; }
+.achievement-main b { font-size: 12px; font-weight: 800; }
+.achievement-main small { font-size: 10px; color: var(--muted); }
+.achievement-bar { height: 4px; border-radius: 999px; background: rgba(126, 232, 255, 0.12); overflow: hidden; }
+.achievement-bar i { display: block; height: 100%; border-radius: 999px; background: var(--cyan); }
+.achievement.is-done .achievement-bar i { background: var(--green); }
+.achievement-value { font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.achievement.is-done .achievement-value { color: var(--green); }

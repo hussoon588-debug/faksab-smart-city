@@ -107,6 +107,23 @@ balance writes exactly one row — `{ reason, amount, balanceAfter, ref, ts }` �
 - A pre-ledger save is migrated to a single `opening_balance` row dated at the wallet's creation
   rather than pretending the history exists.
 
+## Weekly report & milestones
+
+Both are **derived, never stored** — they read the same ledger rows as the wallet, so they
+cannot tell a different story than the balance.
+
+- **تقرير الأسبوع** (league tab): income, spend and net for the current ISO week (Monday →
+  Monday, in the player's own timezone), a seven-bar chart whose bars are that day's net, the
+  best day, and the plot that earned the most. Comparison with last week appears only when last
+  week actually has rows; otherwise the card says «لا بيانات للأسبوع الماضي» instead of a fake
+  percentage.
+- **Opening balances are not income.** `signup_bonus` and `opening_balance` are excluded from
+  the report, otherwise every new wallet would "earn" 12,000 in week one.
+- **الإنجازات**: ten milestones (first plot, first build, five plots, all five districts, a
+  level-5 tower, ten collections, 100/hour income, 40,000 net worth, three sales, fifty ledger
+  rows) with a progress bar and no rewards. No cash, no XP, nothing to claim — a milestone you
+  cannot mint money from is a milestone that stays honest in both local and server mode.
+
 Vendoring: `vendor/three.module.min.js` (r150.1, MIT, 154 KB gzipped) is committed because the
 app ships as plain ES modules with no bundler and must stay offline-capable. See
 `apps/ofuq/vendor/README.md` for the exact provenance and the upgrade procedure.

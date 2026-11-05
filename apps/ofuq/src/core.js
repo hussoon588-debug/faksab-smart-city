@@ -351,14 +351,28 @@ export const offerRemainingMs = (offer, now = Date.now()) =>
 
 export const isOfferLive = (offer, now = Date.now()) => offerRemainingMs(offer, now) > 0;
 
-/** "٣ ساعات" / "٤٥ دقيقة" — a countdown the player can act on, not a timestamp. */
+/**
+ * Arabic counted nouns: 1 واحد، 2 مثنى، 3–10 جمع، 11+ مفرد منصوب.
+ * `counted(3, ['ساعة', 'ساعتان', 'ساعات', 'ساعة'])` → «3 ساعات».
+ */
+export function counted(n, [one, two, few, many]) {
+  const value = Math.max(0, Math.round(Number(n) || 0));
+  if (value === 1) return one;
+  if (value === 2) return two;
+  if (value >= 3 && value <= 10) return `${value} ${few}`;
+  return `${value} ${many}`;
+}
+
+/** "3 ساعات" / "45 دقيقة" — a countdown the player can act on, not a timestamp. */
 export function formatRemaining(ms) {
   const minutes = Math.floor(Math.max(0, ms) / 60000);
   if (minutes <= 0) return 'انتهى';
-  if (minutes < 60) return `${minutes} دقيقة`;
+  const minutesWord = (value) => counted(value, ['دقيقة واحدة', 'دقيقتان', 'دقائق', 'دقيقة']);
+  if (minutes < 60) return minutesWord(minutes);
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;
-  return rest === 0 ? `${hours} ساعة` : `${hours} ساعة و${rest} دقيقة`;
+  const hoursWord = counted(hours, ['ساعة واحدة', 'ساعتان', 'ساعات', 'ساعة']);
+  return rest === 0 ? hoursWord : `${hoursWord} و${minutesWord(rest)}`;
 }
 
 /** Price sanity for the seller's form; the server enforces the same bounds. */
@@ -393,3 +407,166 @@ export function marketSummary(offers = [], now = Date.now()) {
 /** Live offers for a plot the player owns (so the sheet can show "already listed"). */
 export const offerForPlot = (offers = [], plotId, now = Date.now()) =>
   offers.find((offer) => offer.plotId === plotId && isOfferLive(offer, now)) ?? null;
+
+/* -------------------------------------------------------------- insights --- */
+
+const startOfDay = (ts) => {
+  const date = new Date(ts);
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+};
+
+/** ISO week: Monday 00:00 → next Monday 00:00, in the player's own timezone. */
+export function weekBounds(now = Date.now()) {
+  const day = new Date(now).getDay() || 7; // 1 = Monday … 7 = Sunday
+  const start = startOfDay(now) - (day - 1) * DAY_MS;
+  return { start, end: start + 7 * DAY_MS };
+}
+
+const withinWeek = (ts, start, end) => ts >= start && ts < end;
+
+/**
+ * The weekly report is read straight from the ledger — it cannot disagree with the wallet,
+ * because both are the same rows. Nothing here is estimated or extrapolated.
+ */
+export function weeklyReport(state, now = Date.now()) {
+  const { start, end } = weekBounds(now);
+  const previousStart = start - 7 * DAY_MS;
+  const ledger = Array.isArray(state.ledger) ? state.ledger : [];
+
+  // Opening balances are where the wallet started, not what it earned: counting 12,000 as
+  // "income" in week one would be the same kind of lie as an unsourced number.
+  const opening = new Set(['signup_bonus', 'opening_balance']);
+  const rows = ledger.filter((entry) => withinWeek(entry.ts, start, end) && !opening.has(entry.reason));
+  const previousRows = ledger.filter((entry) => withinWeek(entry.ts, previousStart, start) && !opening.has(entry.reason));
+  const totals = ledgerTotals(rows);
+  const previous = ledgerTotals(previousRows);
+
+  const change = (current, before) =>
+    before === 0 ? null : Math.round(((current - before) / Math.abs(before)) * 100);
+
+  const days = Array.from({ length: 7 }, (_, index) => {
+    const dayStart = start + index * DAY_MS;
+    const dayRows = rows.filter((entry) => withinWeek(entry.ts, dayStart, dayStart + DAY_MS));
+    const dayTotals = ledgerTotals(dayRows);
+    return {
+      index,
+      label: new Date(dayStart).toLocaleDateString('ar', { weekday: 'short' }),
+      net: dayTotals.net,
+      inflow: dayTotals.inflow,
+      outflow: dayTotals.outflow,
+      count: dayRows.length
+    };
+  });
+
+  // Which plot actually paid: rent rows carry the plot key in `ref`.
+  const rentByPlot = new Map();
+  for (const entry of rows) {
+    if (entry.reason !== 'rent' || !entry.ref) continue;
+    rentByPlot.set(entry.ref, (rentByPlot.get(entry.ref) ?? 0) + entry.amount);
+  }
+  const top = [...rentByPlot.entries()].sort((a, b) => b[1] - a[1])[0] ?? null;
+  const topPlot = top ? (state.plots?.[top[0]] ?? null) : null;
+
+  const bestDay = days.reduce((best, day) => (day.net > (best?.net ?? -Infinity) ? day : best), null);
+
+  return {
+    start,
+    end,
+    key: weekKey(new Date(now)),
+    rows,
+    count: rows.length,
+    totals,
+    previous,
+    hasPrevious: previousRows.length > 0,
+    incomeChange: change(totals.inflow, previous.inflow),
+    spendChange: change(totals.outflow, previous.outflow),
+    netChange: change(totals.net, previous.net),
+    days,
+    bestDay: bestDay && bestDay.net > 0 ? bestDay : null,
+    topEarner: top ? { key: top[0], amount: top[1], plot: topPlot } : null,
+    daysLeft: Math.max(0, Math.ceil((end - now) / DAY_MS))
+  };
+}
+
+/* --------------------------------------------------------- achievements --- */
+/**
+ * Milestones are *derived*, never stored and never rewarded with cash. That keeps them
+ * honest in both modes: the server owns the wallet, and nothing here can mint money or
+ * claim a badge the player did not earn.
+ */
+export const ACHIEVEMENTS = [
+  { id: 'first_plot', name: 'أول قطعة', hint: 'امتلك قطعة أرض', target: 1, value: (s) => listPlots(s).length },
+  {
+    id: 'first_build',
+    name: 'أول بناء',
+    hint: 'طوّر أصلاً واحداً',
+    target: 1,
+    value: (s) => listPlots(s).filter((plot) => plot.assetId).length
+  },
+  { id: 'five_plots', name: 'خمس قطع', hint: 'امتلك ٥ قطع', target: 5, value: (s) => listPlots(s).length },
+  {
+    id: 'every_district',
+    name: 'خمسة أحياء',
+    hint: 'امتلك في الأحياء الخمسة',
+    target: DISTRICTS.length,
+    value: (s) => new Set(listPlots(s).map((plot) => plot.districtId)).size
+  },
+  {
+    id: 'tower',
+    name: 'برج',
+    hint: 'أصل بالمستوى الخامس',
+    target: 1,
+    value: (s) => (listPlots(s).some((plot) => (plot.level ?? 0) >= ECONOMY.maxLevel) ? 1 : 0)
+  },
+  {
+    id: 'collector',
+    name: 'مُحصِّل',
+    hint: '١٠ عمليات تحصيل',
+    target: 10,
+    value: (s) => Number(s.stats?.collected ?? 0)
+  },
+  {
+    id: 'landlord',
+    name: 'مالك أصول',
+    hint: 'دخل ١٠٠ عملة/ساعة',
+    target: 100,
+    value: (s) => Math.round(hourlyIncome(s))
+  },
+  {
+    id: 'whale',
+    name: 'ثروة',
+    hint: 'صافي قيمة ٤٠٬٠٠٠',
+    target: 40000,
+    value: (s) => Math.round(netWorth(s))
+  },
+  {
+    id: 'trader',
+    name: 'تاجر',
+    hint: '٣ عمليات بيع',
+    target: 3,
+    value: (s) => Number(s.stats?.sold ?? 0)
+  },
+  {
+    id: 'auditor',
+    name: 'دفتر منتظم',
+    hint: '٥٠ حركة مالية مسجّلة',
+    target: 50,
+    value: (s) => (Array.isArray(s.ledger) ? s.ledger.length : 0)
+  }
+];
+
+export function achievementBoard(state) {
+  return ACHIEVEMENTS.map((achievement) => {
+    const raw = Math.max(0, Number(achievement.value(state)) || 0);
+    const shown = Math.min(raw, achievement.target);
+    return {
+      id: achievement.id,
+      name: achievement.name,
+      hint: achievement.hint,
+      target: achievement.target,
+      value: shown,
+      done: raw >= achievement.target,
+      progress: achievement.target > 0 ? shown / achievement.target : 1
+    };
+  });
+}

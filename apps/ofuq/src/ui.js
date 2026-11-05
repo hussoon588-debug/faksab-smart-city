@@ -7,8 +7,10 @@
  */
 import { APP, ASSET_TYPES, DISTRICTS, ECONOMY } from './config.js';
 import {
+  achievementBoard,
   assetFor,
   challengeBoard,
+  counted,
   districtFor,
   districtStats,
   formatCompact,
@@ -37,7 +39,8 @@ import {
   portfolioValue,
   saleProceeds,
   upgradeCost,
-  weekDaysLeft
+  weekDaysLeft,
+  weeklyReport
 } from './core.js';
 import {
   CITY_FILTERS,
@@ -122,6 +125,8 @@ export function mount(store) {
     renderPortfolio(snap);
     renderLedger(snap);
     renderMarket(snap);
+    renderReport(snap);
+    renderAchievements(snap);
     renderLeague(snap);
     if (view.sheetKey) renderSheet(snap);
     renderSettingsState();
@@ -622,13 +627,84 @@ export function mount(store) {
     return `<div class="sheet-history"><h3>سجل هذه القطعة</h3><ul>${rows}</ul></div>`;
   }
 
+  /* -------------------------------------------------------------- insights --- */
+
+  const signedPct = (value) => (value === null ? null : `${value > 0 ? '+' : ''}${value}%`);
+
+  function renderReport(snap) {
+    const report = weeklyReport(snap.state, Date.now());
+    const node = $('reportKey');
+    if (!node) return;
+
+    node.textContent = `${report.key} · ينتهي بعد ${counted(report.daysLeft, ['يوم واحد', 'يومان', 'أيام', 'يوماً'])}`;
+    $('rpIncome').textContent = formatCompact(report.totals.inflow);
+    $('rpSpend').textContent = formatCompact(report.totals.outflow);
+    $('rpNet').textContent = `${report.totals.net >= 0 ? '+' : '−'}${formatCompact(Math.abs(report.totals.net))}`;
+
+    // Seven bars, honest to the cent: each one is that day's net from the ledger.
+    const peak = Math.max(1, ...report.days.map((day) => Math.abs(day.net)));
+    $('rpChart').innerHTML = report.days
+      .map((day) => {
+        if (day.net === 0) return '<span class="bar is-empty" style="height:4%"></span>';
+        const height = Math.max(6, Math.round((Math.abs(day.net) / peak) * 100));
+        return `<span class="bar ${day.net < 0 ? 'is-negative' : ''}" style="height:${height}%"></span>`;
+      })
+      .join('');
+    $('rpChart').setAttribute(
+      'aria-label',
+      report.days.map((day) => `${day.label}: ${formatNumber(day.net)}`).join(' · ')
+    );
+
+    const parts = [];
+    if (report.count === 0) {
+      parts.push('لا حركات مالية هذا الأسبوع بعد — ابدأ بشراء قطعة أو تطوير أصل.');
+    } else {
+      if (report.hasPrevious) {
+        parts.push(
+          `الدخل ${signedPct(report.incomeChange) ?? '—'} والمصروف ${signedPct(report.spendChange) ?? '—'} مقارنة بالأسبوع الماضي.`
+        );
+      } else {
+        parts.push('لا بيانات للأسبوع الماضي — هذا أول أسبوع مسجّل.');
+      }
+      if (report.topEarner) {
+        const district = districtFor(report.topEarner.plot?.districtId);
+        parts.push(
+          `أعلى دخل: ${district?.name ?? 'قطعة'} · قطعة ${report.topEarner.plot?.plotNo ?? ''} (${formatNumber(report.topEarner.amount)}).`
+        );
+      }
+      if (report.bestDay) parts.push(`أفضل يوم: ${report.bestDay.label}.`);
+    }
+    $('rpNote').textContent = parts.join(' ');
+  }
+
+  function renderAchievements() {
+    const list = $('achievementList');
+    if (!list) return;
+    const board = achievementBoard(store.state);
+    const done = board.filter((item) => item.done).length;
+    $('achievementCount').textContent = `${done} / ${board.length}`;
+    list.innerHTML = board
+      .map(
+        (item) => `<div class="achievement ${item.done ? 'is-done' : ''}">
+          <span class="achievement-ico" aria-hidden="true">${item.done ? '✓' : '·'}</span>
+          <span class="achievement-main">
+            <b>${escapeHtml(item.name)}</b>
+            <small>${escapeHtml(item.hint)}</small>
+            <span class="achievement-bar"><i style="width:${Math.round(item.progress * 100)}%"></i></span>
+          </span>
+          <span class="achievement-value">${formatCompact(item.value)} / ${formatCompact(item.target)}</span>
+        </div>`
+      )
+      .join('');
+  }
+
   function renderLeague(snap) {
     const { state } = snap;
     const rows = leaderboard(state);
     const me = rows.find((row) => row.you);
     $('rankBadge').textContent = `#${me.rank}`;
     $('scoreValue').textContent = formatCompact(me.score);
-    $('weekLeft').textContent = `${weekDaysLeft()} يوم على إغلاق الدوري`;
+    $('weekLeft').textContent = `${counted(weekDaysLeft(), ['يوم واحد', 'يومان', 'أيام', 'يوماً'])} على إغلاق الدوري`;
 
     const board = challengeBoard(state);
     $('challengeList').innerHTML = board
