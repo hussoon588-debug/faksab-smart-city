@@ -482,3 +482,20 @@ body::after {
 @media (prefers-reduced-motion: reduce) {
   .city-zoom button:active { transform: none; }
 }
+
+/* --------------------------------------------------------------- account --- */
+.account {
+  margin: 4px 0 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(126, 232, 255, 0.04);
+}
+.account h3 { margin: 0 0 6px; font-size: 12px; font-weight: 900; color: var(--gold); }
+.account .meta { margin: 0 0 8px; font-size: 11px; line-height: 1.8; color: var(--muted); }
+.account .field { margin-bottom: 8px; }
+.account .row { margin-top: 8px; }
+.row.gap { display: flex; gap: 8px; }
+.row.gap .btn { flex: 1; }
+.row-actions { display: inline-flex; gap: 6px; }
+.btn[aria-busy='true'] { opacity: 0.6; pointer-events: none; }

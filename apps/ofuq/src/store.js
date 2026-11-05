@@ -300,6 +300,9 @@ export function createStore({ storage = browserStorage(), now = () => Date.now()
     },
 
     reset() {
+      // In the shared city the wallet belongs to the server: wiping the local mirror
+      // would hide (not delete) the real account, which is exactly the lie to avoid.
+      if (remote) return { ok: false, message: 'لا يمكن حذف التقدم في المدينة المشتركة — سجّل الخروج أولاً.' };
       state = createInitialState(now());
       state.playerName = APP.defaultPlayerName;
       emit();
@@ -420,6 +423,63 @@ export function createStore({ storage = browserStorage(), now = () => Date.now()
     }
   }
 
+  /* ------------------------------------------------------------------ auth --- */
+
+  const NO_SERVER = { ok: false, message: 'هذه النسخة تعمل محلياً — لا يوجد خادم مُهيّأ.' };
+
+  /**
+   * Account API. Local mode answers honestly instead of offering a button that cannot work;
+   * server mode delegates to `remote` and adopts the snapshot the server returns.
+   */
+  const auth = {
+    get available() {
+      return Boolean(remote);
+    },
+    get signedIn() {
+      return Boolean(remote?.signedIn);
+    },
+    get email() {
+      return remote?.user?.email ?? null;
+    },
+
+    /** Try the stored session on boot. Never toasts on the "no session" path. */
+    async restore() {
+      if (!remote) return NO_SERVER;
+      const result = await remote.restoreSession();
+      if (!result?.ok) return { ok: false, message: result?.message ?? 'لا توجد جلسة محفوظة.' };
+      if (result.snapshot) applySnapshot(result.snapshot);
+      return { ok: true, message: 'مرحباً بعودتك.' };
+    },
+
+    async signIn(email, password) {
+      if (!remote) return NO_SERVER;
+      const result = await remote.signIn(String(email ?? '').trim(), String(password ?? ''));
+      if (!result.ok) return { ok: false, message: result.message };
+      const sync = await syncFromServer();
+      return sync.ok
+        ? { ok: true, message: 'تم تسجيل الدخول ومزامنة المدينة.' }
+        : { ok: true, message: 'تم تسجيل الدخول — تعذر تحميل المدينة الآن.' };
+    },
+
+    async signUp(email, password, displayName) {
+      if (!remote) return NO_SERVER;
+      const result = await remote.signUp(String(email ?? '').trim(), String(password ?? ''), displayName);
+      if (!result.ok) return { ok: false, message: result.message };
+      const sync = await syncFromServer();
+      return sync.ok
+        ? { ok: true, message: 'تم إنشاء الحساب ومزامنة المدينة.' }
+        : { ok: true, message: 'تم إنشاء الحساب — تعذر تحميل المدينة الآن.' };
+    },
+
+    /** The mirror stays on screen (the city is still readable) but nothing can be written. */
+    async signOut() {
+      if (!remote) return NO_SERVER;
+      const result = await remote.signOut();
+      emit();
+      return result;
+    }
+  };
+
   async function syncFromServer() {
     if (!remote?.snapshot) return { ok: false, message: 'لا يوجد خادم مُهيّأ.' };
     const result = await remote.snapshot();
@@ -448,6 +508,7 @@ export function createStore({ storage = browserStorage(), now = () => Date.now()
     },
     dispatch,
     syncFromServer,
+    auth,
     applySnapshot,
     subscribe(listener) {
       listeners.add(listener);

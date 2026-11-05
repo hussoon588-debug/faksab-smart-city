@@ -194,6 +194,31 @@
       <input id="playerName" type="text" maxlength="24" autocomplete="nickname" enterkeyhint="done">
     </label>
     <button class="btn btn-ghost" type="button" id="saveName">حفظ الاسم</button>
+    <section class="account" aria-labelledby="accountTitle">
+      <h3 id="accountTitle">الحساب والمدينة المشتركة</h3>
+      <p class="meta" id="accountState">—</p>
+      <form id="authForm" novalidate hidden>
+        <label class="field">
+          <span>البريد الإلكتروني</span>
+          <input id="authEmail" type="email" inputmode="email" autocomplete="email" dir="ltr" required>
+        </label>
+        <label class="field">
+          <span>كلمة المرور (٦ أحرف على الأقل)</span>
+          <input id="authPassword" type="password" autocomplete="current-password" minlength="6" dir="ltr" required>
+        </label>
+        <div class="row gap">
+          <button class="btn btn-ghost" type="submit" id="authSignIn">تسجيل الدخول</button>
+          <button class="btn btn-ghost" type="button" id="authSignUp">إنشاء حساب</button>
+        </div>
+      </form>
+      <div class="row" id="accountSession" hidden>
+        <span id="accountEmail" dir="ltr">—</span>
+        <span class="row-actions">
+          <button class="btn btn-ghost sm" type="button" id="authSync">مزامنة</button>
+          <button class="btn btn-ghost sm" type="button" id="authSignOut">خروج</button>
+        </span>
+      </div>
+    </section>
     <div class="row">
       <span>الاهتزاز عند التفاعل</span>
       <button class="btn btn-ghost sm" type="button" id="hapticsToggle" aria-pressed="true">مفعّل</button>

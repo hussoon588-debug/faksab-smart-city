@@ -98,6 +98,26 @@ Rules the backend enforces (never the browser):
   of its own rows; `ofuq_plots` is public-read so the shared map renders before sign-in.
   Only `authenticated` may execute the RPCs, and no `service_role` key ever reaches the client.
 
+### Accounts
+
+`store.auth` is the seam between the UI and the adapter, and the settings sheet is its only
+door:
+
+- **Local mode** (default): the panel says «هذه النسخة تعمل محلياً…» and shows no form, because
+  a login button with no server is exactly the fake button the rules forbid.
+- **Server mode, signed out**: email + password with client-side validation (email shape, six
+  characters minimum), «تسجيل الدخول» and «إنشاء حساب». Every failure is a sentence, not a
+  silent no-op.
+- **Server mode, signed in**: the account row shows the email, «مزامنة» re-reads the city, and
+  «خروج» ends the session. The mirror stays on screen (the city is still readable) but every
+  write returns «سجّل الدخول…».
+- A stored session is restored at boot, so a returning player is not asked again.
+- `حذف التقدم` is **disabled in server mode**: wiping the local mirror would hide, not delete,
+  the account — the exact lie this product forbids.
+
+Not built yet: password reset, email confirmation UX, Google/Apple sign-in, MFA and session
+listing. Those are provider features that need a domain and an identity decision.
+
 ### Turning it on
 
 1. Create a Supabase project, open the SQL editor and run `supabase/ofuq/schema.sql` once.
@@ -114,7 +134,7 @@ Rules the backend enforces (never the browser):
 
 ### What is *not* built yet
 
-- Sign-in / sign-up UI, session expiry UX and account linking (the adapter supports them).
+- Password reset, email confirmation, Google/Apple, MFA, account linking and session expiry UX.
 - Realtime presence or push of other players' actions (the map refreshes on request only).
 - Player-to-player market, rentals/offers, missions beyond `ofuq_missions` seeds, and the
   admin console. The ledger already has `mission_reward`, `market_fee` and `admin_adjustment`

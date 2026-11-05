@@ -32,6 +32,7 @@ import {
   buildCityModel,
   citySummary,
   createCityScene,
+  drawMinimap,
   matchPlots,
   minimapRect,
   plotLabel,
@@ -229,31 +230,13 @@ export function mount(store) {
     // Without WebGL the minimap still works: it is plain 2D canvas, and it keeps the
     // whole city (100 plots) visible on devices that cannot render the 3D view.
     if (view.cityStatus === 'unsupported') {
+      // Same painter as the 3D scene, so both views always agree on colours and layout.
       const minimap = $('cityMinimap');
-      drawMinimapSafe(minimap?.getContext?.('2d') ?? null, model);
-    }
-  }
-
-  function drawMinimapSafe(ctx, model) {
-    if (!ctx) return;
-    try {
-      ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-      for (const entry of model.plots) {
-        const cell = minimapRect(entry, { width: ctx.canvas.width, height: ctx.canvas.height });
-        ctx.fillStyle =
-          entry.state === 'locked'
-            ? 'rgba(120,126,138,0.45)'
-            : entry.state === 'free'
-              ? 'rgba(216,203,178,0.4)'
-              : entry.state === 'owned'
-                ? 'rgba(154,168,139,0.85)'
-                : entry.ready
-                  ? 'rgba(79,214,164,0.95)'
-                  : 'rgba(142,168,202,0.9)';
-        ctx.fillRect(cell.x, cell.y, cell.size, cell.size);
+      try {
+        drawMinimap(minimap?.getContext?.('2d') ?? null, model);
+      } catch (error) {
+        console.warn('[ofuq] minimap', error);
       }
-    } catch (error) {
-      console.warn('[ofuq] minimap', error);
     }
   }
 
@@ -522,7 +505,106 @@ export function mount(store) {
     $('settingsVersion').textContent = APP.version;
     $('hapticsToggle').textContent = state.settings?.haptics ? 'مفعّل' : 'مغلق';
     $('hapticsToggle').setAttribute('aria-pressed', String(Boolean(state.settings?.haptics)));
-    $('syncState').textContent = store.ephemeral ? 'الحفظ غير متاح — الجلسة مؤقتة' : 'محلي على هذا الجهاز';
+    $('syncState').textContent = store.ephemeral
+      ? 'الحفظ غير متاح — الجلسة مؤقتة'
+      : store.mode === 'supabase'
+        ? store.auth.signedIn
+          ? 'خادم مشترك'
+          : 'خادم — بلا جلسة'
+        : 'محلي على هذا الجهاز';
+    renderAccount();
+  }
+
+  /**
+   * The account panel is the only place that can create a session, so it states exactly
+   * what is possible right now instead of showing a disabled button with no explanation.
+   */
+  function renderAccount() {
+    const state = $('accountState');
+    const form = $('authForm');
+    const session = $('accountSession');
+    if (!state || !form || !session) return;
+
+    const reset = $('resetGame');
+    const canReset = store.mode !== 'supabase';
+    if (reset) {
+      reset.disabled = !canReset;
+      reset.textContent = canReset ? 'حذف التقدم والبدء من جديد' : 'لا يمكن حذف التقدم في المدينة المشتركة';
+    }
+
+    if (!store.auth.available) {
+      state.textContent =
+        'هذه النسخة تعمل محلياً: التقدم محفوظ على هذا الجهاز فقط، والرصيد محاكاة داخل اللعبة. لتفعيل المدينة المشتركة أضف مشروع Supabase في الإعدادات وعدّل config.js.';
+      form.hidden = true;
+      session.hidden = true;
+      return;
+    }
+
+    if (store.auth.signedIn) {
+      state.textContent = 'أنت داخل المدينة المشتركة: الرصيد والملكية والإيجار كلها على الخادم.';
+      form.hidden = true;
+      session.hidden = false;
+      $('accountEmail').textContent = store.auth.email ?? 'حساب مسجّل';
+      return;
+    }
+
+    state.textContent = 'الخادم مُهيّأ. سجّل الدخول أو أنشئ حساباً لتشارك المدينة مع لاعبين آخرين.';
+    form.hidden = false;
+    session.hidden = true;
+  }
+
+  /** Runs an auth call with a visible busy state and a single honest toast. */
+  async function runAuth(button, task, busyLabel) {
+    if (button) {
+      button.setAttribute('aria-busy', 'true');
+      button.dataset.label = button.textContent;
+      button.textContent = busyLabel;
+    }
+    try {
+      const result = await task();
+      act(result, 24);
+      return result;
+    } catch (error) {
+      console.warn('[ofuq] auth', error);
+      return act({ ok: false, message: 'تعذر الاتصال بالخادم — حاول مرة أخرى.' });
+    } finally {
+      if (button) {
+        button.removeAttribute('aria-busy');
+        if (button.dataset.label) button.textContent = button.dataset.label;
+      }
+      renderAccount();
+    }
+  }
+
+  function authCredentials() {
+    const email = $('authEmail')?.value ?? '';
+    const password = $('authPassword')?.value ?? '';
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(email.trim())) {
+      return { ok: false, message: 'أدخل بريداً إلكترونياً صحيحاً.' };
+    }
+    if (password.length < 6) return { ok: false, message: 'كلمة المرور يجب أن تكون ٦ أحرف أو أكثر.' };
+    return { ok: true, email: email.trim(), password };
+  }
+
+  async function submitAuth(mode) {
+    if (!store.auth.available) return act({ ok: false, message: 'لا يوجد خادم مُهيّأ في هذه النسخة.' });
+    const creds = authCredentials();
+    if (!creds.ok) return act(creds);
+    const button = $(mode === 'signup' ? 'authSignUp' : 'authSignIn');
+    const result = await runAuth(
+      button,
+      () =>
+        mode === 'signup'
+          ? store.auth.signUp(creds.email, creds.password, $('playerName')?.value || APP.defaultPlayerName)
+          : store.auth.signIn(creds.email, creds.password),
+      mode === 'signup' ? 'جارٍ الإنشاء…' : 'جارٍ الدخول…'
+    );
+    if (result.ok) {
+      $('authPassword').value = '';
+      closeSettings();
+      render();
+    }
+    return result;
   }
 
   /* ---------------------------------------------------------------- events */
@@ -644,6 +726,22 @@ export function mount(store) {
     closeSheet();
     closeSettings();
   });
+
+  const authForm = $('authForm');
+  authForm?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    submitAuth('signin');
+  });
+  $('authSignUp')?.addEventListener('click', () => submitAuth('signup'));
+  $('authSync')?.addEventListener('click', () =>
+    runAuth($('authSync'), async () => {
+      const result = await store.syncFromServer();
+      return result.ok ? { ok: true, message: result.message } : result;
+    }, 'جارٍ…')
+  );
+  $('authSignOut')?.addEventListener('click', () =>
+    runAuth($('authSignOut'), () => store.auth.signOut(), 'جارٍ…')
+  );
 
   const searchInput = $('citySearch');
   if (searchInput) {

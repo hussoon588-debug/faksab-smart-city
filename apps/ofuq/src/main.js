@@ -34,6 +34,14 @@ const store = createStore({
 const ui = mount(store);
 document.documentElement.dataset.app = `${APP.id}@${APP.version}`;
 
+// A returning player should not have to sign in again; a stale token fails quietly and
+// the shell keeps working in «بحاجة لتسجيل الدخول» rather than pretending to be synced.
+if (remote) {
+  store.auth.restore().then((result) => {
+    if (result.ok) ui.toast(result.message, 'ok');
+  });
+}
+
 if (bootErrors.length > 0) {
   ui.toast(bootErrors[0].message, 'bad');
 }
