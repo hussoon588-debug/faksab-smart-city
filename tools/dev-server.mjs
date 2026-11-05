@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Zero-dependency static dev server for the repository.
-//   npm run dev            → http://0.0.0.0:8000/
+//   npm run dev                          → http://0.0.0.0:8000/
 //   PORT=3000 npm run dev
+//   SERVE_ROOT=apps/ofuq PORT=8001 npm run dev   (serve one app standalone)
 // Binds 0.0.0.0 so it also works behind a container/preview proxy.
 import { createServer } from 'node:http';
 import { createReadStream } from 'node:fs';
@@ -9,7 +10,8 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
+const REPO = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
+const ROOT = process.env.SERVE_ROOT ? path.resolve(REPO, process.env.SERVE_ROOT) : REPO;
 const PORT = Number(process.env.PORT || 8000);
 const HOST = process.env.HOST || '0.0.0.0';
 
@@ -98,7 +100,11 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`dev server → http://localhost:${PORT}/            (FAKSAB)`);
-  console.log(`dev server → http://localhost:${PORT}/apps/ofuq/   (OFUQ)`);
+  if (ROOT === REPO) {
+    console.log(`dev server → http://localhost:${PORT}/            (FAKSAB)`);
+    console.log(`dev server → http://localhost:${PORT}/apps/ofuq/   (OFUQ)`);
+  } else {
+    console.log(`dev server → http://localhost:${PORT}/           (standalone: ${path.relative(REPO, ROOT)})`);
+  }
   console.log(`serving ${ROOT}`);
 });

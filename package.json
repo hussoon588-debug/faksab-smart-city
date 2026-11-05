@@ -9,6 +9,7 @@
   },
   "scripts": {
     "dev": "node tools/dev-server.mjs",
+    "dev:ofuq": "SERVE_ROOT=apps/ofuq node tools/dev-server.mjs",
     "build": "node tools/build.mjs",
     "check": "node tools/check.mjs",
     "check:strict": "node tools/check.mjs --strict",
