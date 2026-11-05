@@ -11,7 +11,7 @@ export const APP = {
   name: 'أفق',
   nameEn: 'OFUQ',
   tagline: 'استثمار حضري ذكي',
-  version: '0.8.0',
+  version: '0.9.0',
   storageKey: 'ofuq:v1',
   schemaVersion: 1,
   numberLocale: 'en-US',

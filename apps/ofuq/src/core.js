@@ -756,3 +756,98 @@ export function serverReadiness(facts = {}, now = Date.now()) {
     roundTripMs
   };
 }
+
+/* --------------------------------------------------------------- auditing --- */
+/**
+ * A wallet is only as trustworthy as its ledger. This walks the rows oldest-first and checks
+ * the arithmetic the player can check for themselves: every row must land exactly on the
+ * balance its predecessor left behind, the newest must equal the cash on hand, and no row may
+ * repeat or point at money that never existed.
+ *
+ * It audits the rows in hand — in local mode that is this device's ledger, in server mode it is
+ * the snapshot the server sent. It says nothing about players it cannot see.
+ */
+export function auditLedger(entries = [], cash = 0, { now = Date.now() } = {}) {
+  const rows = (Array.isArray(entries) ? entries : [])
+    .filter((entry) => entry && Number.isFinite(Number(entry.ts)))
+    .slice()
+    .sort((a, b) => Number(a.ts) - Number(b.ts) || Number(a.seq ?? 0) - Number(b.seq ?? 0));
+
+  const issues = [];
+  const seen = new Set();
+
+  for (const row of rows) {
+    const id = String(row.id ?? '');
+    if (id) {
+      if (seen.has(id)) issues.push({ code: 'duplicate', id, message: 'حركة مكرّرة بنفس المعرّف' });
+      seen.add(id);
+    }
+    if (!Number.isFinite(Number(row.amount)) || Number(row.amount) === 0) {
+      issues.push({ code: 'zero', id, message: 'حركة بمبلغ صفري أو غير صالح' });
+    }
+    if (Number.isFinite(Number(row.balanceAfter)) && Number(row.balanceAfter) < 0) {
+      issues.push({ code: 'negative', id, message: 'رصيد سالب بعد الحركة' });
+    }
+  }
+
+  // The chain: opening row stands on its own, every later row must continue exactly.
+  rows.forEach((row, index) => {
+    const balance = Number(row.balanceAfter);
+    if (!Number.isFinite(balance)) {
+      issues.push({ code: 'missing-balance', id: String(row.id ?? ''), message: 'حركة بلا رصيد بعدها' });
+      return;
+    }
+    if (index === 0) {
+      const opening = ['signup_bonus', 'opening_balance'].includes(row.reason);
+      if (!opening) {
+        issues.push({
+          code: 'opening',
+          id: String(row.id ?? ''),
+          message: 'أول حركة في الدفتر ليست رصيد بداية'
+        });
+      } else if (balance !== Number(row.amount)) {
+        issues.push({
+          code: 'opening',
+          id: String(row.id ?? ''),
+          message: 'رصيد البداية لا يساوي أول حركة',
+          expected: Number(row.amount),
+          actual: balance
+        });
+      }
+      return;
+    }
+    const previous = rows[index - 1];
+    const expected = Number(previous.balanceAfter) + Number(row.amount);
+    if (expected !== balance) {
+      issues.push({
+        code: 'break',
+        id: String(row.id ?? ''),
+        message: 'الرصيد بعد الحركة لا يطابق مجموع ما قبلها',
+        expected,
+        actual: balance,
+        reason: row.reason
+      });
+    }
+  });
+
+  const newest = rows[rows.length - 1] ?? null;
+  if (newest && Number(newest.balanceAfter) !== Number(cash)) {
+    issues.push({
+      code: 'cash',
+      id: String(newest.id ?? ''),
+      message: 'آخر حركة لا تطابق رصيد المحفظة',
+      expected: Number(newest.balanceAfter),
+      actual: Number(cash)
+    });
+  }
+
+  return {
+    ok: issues.length === 0,
+    checked: rows.length,
+    issues,
+    firstAt: rows[0]?.ts ?? null,
+    lastAt: newest?.ts ?? null,
+    spanDays: rows.length > 1 ? Math.max(1, Math.round((Number(newest.ts) - Number(rows[0].ts)) / DAY_MS)) : 0,
+    auditedAt: now
+  };
+}
