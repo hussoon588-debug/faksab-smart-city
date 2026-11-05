@@ -227,5 +227,7 @@ ofuq_claim_mission (p_mission,            p_idempotency)
   يستلزم تعديل الطرفين واختبار `tests/ofuq/core.test.mjs` و`tests/ofuq/remote.test.mjs`.
 - البند 8 حُسم لصالح Three.js ونُفِّذ في `apps/ofuq/src/scene.js` (انظر
   `docs/OFUQ_GAP_ANALYSIS.md` §5).
+- المرحلتان 1 و4 من الجدول مُنفَّذتان فعلاً (لوحة الحساب، والمحفظة/الدفتر)؛ ما يتبقى من
+  المرحلة أ هو تكبير/بحث الخريطة المتقدم وبعض تحسينات لوحة القطعة.
 - بعد المرحلة 1 يصبح الوضع المشترك قابلاً للتجربة فعلياً: تشغيل
   `supabase/ofuq/schema.sql` ثم تعبئة ثلاثة حقول في `apps/ofuq/src/config.js`.

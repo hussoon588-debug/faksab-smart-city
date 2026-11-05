@@ -28,13 +28,13 @@ function json(payload, status = 200) {
 function createFakeSupabase({ clock = { now: Date.UTC(2026, 10, 5, 9) } } = {}) {
   const users = new Map(); // email -> password
   const tokens = new Map(); // token -> email
-  const accounts = new Map(); // email -> { balance, xp, plots, claims, ledger:Set }
+  const accounts = new Map(); // email -> { balance, xp, plots, claims, ledger:Set (idempotency), rows:[] (money) }
   const plots = new Map(); // key -> { id, districtId, plotNo, owner, assetId, level, lastCollectedAt }
   let calls = 0;
 
   const accountFor = (email) => {
     if (!accounts.has(email)) {
-      accounts.set(email, { balance: 12000, xp: 0, plots: new Set(), claims: new Set(), ledger: new Set() });
+      accounts.set(email, { balance: 12000, xp: 0, plots: new Set(), claims: new Set(), ledger: new Set(), rows: [] });
     }
     return accounts.get(email);
   };
@@ -74,15 +74,27 @@ function createFakeSupabase({ clock = { now: Date.UTC(2026, 10, 5, 9) } } = {}) 
         value: plot.price
       })),
       weekly: { bought: 0, developed: 0, upgraded: 0, collected: 0 },
-      claims: [...account.claims]
+      claims: [...account.claims],
+      ledger: account.rows.slice(0, 100).map((row, index) => ({ ...row, seq: index }))
     };
   }
 
-  function spend(account, email, key, delta) {
+  let rowId = 0;
+  function spend(account, email, key, delta, reason = 'admin_adjustment', ref = null) {
     if (key && account.ledger.has(key)) return { replayed: true };
     if (account.balance + delta < 0) throw new Error('السيولة غير كافية');
     account.balance += delta;
     if (key) account.ledger.add(key);
+    rowId += 1;
+    account.rows.unshift({
+      id: rowId,
+      ts: new Date(clock.now).toISOString(),
+      reason,
+      amount: delta,
+      balanceAfter: account.balance,
+      ref
+    });
+    if (account.rows.length > 100) account.rows.length = 100;
     return { replayed: false };
   }
 
@@ -98,7 +110,7 @@ function createFakeSupabase({ clock = { now: Date.UTC(2026, 10, 5, 9) } } = {}) 
       const plot = plots.get(`${p_district}:${p_plot_no}`);
       if (!plot) throw new Error('القطعة غير موجودة');
       if (plot.owner) throw new Error('هذه القطعة مملوكة بالفعل');
-      if (spend(account, email, p_idempotency, -plot.price).replayed) return snapshot(email);
+      if (spend(account, email, p_idempotency, -plot.price, 'plot_purchase', `${p_district}:${p_plot_no}`).replayed) return snapshot(email);
       plot.owner = email;
       account.plots.add(`${p_district}:${p_plot_no}`);
       account.xp += 40;
@@ -116,7 +128,7 @@ function createFakeSupabase({ clock = { now: Date.UTC(2026, 10, 5, 9) } } = {}) 
       if (!asset) throw new Error('نوع الأصل غير معروف');
       const account = accountFor(email);
       if (levelOf(account.xp) < asset.unlockLevel) throw new Error(`هذا الأصل يُفتح في المستوى ${asset.unlockLevel}`);
-      if (spend(account, email, p_idempotency, -asset.cost).replayed) return snapshot(email);
+      if (spend(account, email, p_idempotency, -asset.cost, 'development', `${plot.districtId}:${plot.plotNo}`).replayed) return snapshot(email);
       plot.assetId = p_asset;
       plot.level = 1;
       plot.lastCollectedAt = clock.now;
@@ -133,7 +145,7 @@ function createFakeSupabase({ clock = { now: Date.UTC(2026, 10, 5, 9) } } = {}) 
       if (plot.level >= 5) throw new Error('وصل الأصل إلى أعلى مستوى');
       const account = accountFor(email);
       const cost = upgradeCost(plot.assetId, plot.level, DISTRICTS[plot.districtId].tier);
-      if (spend(account, email, p_idempotency, -cost).replayed) return snapshot(email);
+      if (spend(account, email, p_idempotency, -cost, 'upgrade', `${plot.districtId}:${plot.plotNo}`).replayed) return snapshot(email);
       plot.level += 1;
       account.xp += 90;
       return snapshot(email);
@@ -151,6 +163,15 @@ function createFakeSupabase({ clock = { now: Date.UTC(2026, 10, 5, 9) } } = {}) 
       const amount = Math.floor(Math.min(Math.max(elapsed, 0), 8) * rate);
       if (amount <= 0) throw new Error('لم يتراكم إيجار كافٍ بعد');
       account.balance += amount;
+      rowId += 1;
+      account.rows.unshift({
+        id: rowId,
+        ts: new Date(clock.now).toISOString(),
+        reason: 'rent',
+        amount,
+        balanceAfter: account.balance,
+        ref: plot.id
+      });
       if (p_idempotency) account.ledger.add(p_idempotency);
       plot.lastCollectedAt = clock.now;
       account.xp += 6;
@@ -165,7 +186,7 @@ function createFakeSupabase({ clock = { now: Date.UTC(2026, 10, 5, 9) } } = {}) 
       const account = accountFor(email);
       const build = plot.assetId ? Math.round(ASSETS[plot.assetId].cost * (1 + 0.35 * (plot.level - 1)) * 0.9) : 0;
       const proceeds = Math.round((plot.price + build) * 0.96);
-      if (spend(account, email, p_idempotency, proceeds).replayed) return snapshot(email);
+      if (spend(account, email, p_idempotency, proceeds, 'sale', `${plot.districtId}:${plot.plotNo}`).replayed) return snapshot(email);
       plot.owner = null;
       plot.assetId = null;
       plot.level = 0;
@@ -182,7 +203,7 @@ function createFakeSupabase({ clock = { now: Date.UTC(2026, 10, 5, 9) } } = {}) 
       const rewards = { own4: 800, develop3: 600 };
       if (!(p_mission in rewards)) throw new Error('التحدي غير معروف');
       if (p_mission === 'own4' && account.plots.size < 4) throw new Error('لم يكتمل التحدي بعد');
-      if (spend(account, email, p_idempotency, rewards[p_mission]).replayed) return snapshot(email);
+      if (spend(account, email, p_idempotency, rewards[p_mission], 'mission_reward', p_mission).replayed) return snapshot(email);
       account.claims.add(p_mission);
       return snapshot(email);
     }

@@ -499,3 +499,42 @@ body::after {
 .row.gap .btn { flex: 1; }
 .row-actions { display: inline-flex; gap: 6px; }
 .btn[aria-busy='true'] { opacity: 0.6; pointer-events: none; }
+
+/* ---------------------------------------------------------------- ledger --- */
+.chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.chip-row button {
+  padding: 6px 11px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--muted);
+  background: rgba(126, 232, 255, 0.06);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.chip-row button.is-active { color: #04121f; background: var(--gold); border-color: var(--gold); }
+
+.ledger { display: grid; gap: 10px; }
+.ledger-day { display: flex; align-items: center; justify-content: space-between; font-size: 10px; color: var(--muted); }
+.ledger-day b { font-size: 11px; }
+.ledger-day b.pos { color: var(--green); }
+.ledger-day b.neg { color: var(--red); }
+.ledger-rows { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.ledger-row { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px; }
+.ledger-ico { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 9px; font-size: 12px; font-weight: 900; flex: none; }
+.ledger-ico.in { color: #04121f; background: var(--green); }
+.ledger-ico.out { color: #ffe7ea; background: rgba(255, 92, 108, 0.22); }
+.ledger-main { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.ledger-main b { font-size: 12px; font-weight: 800; }
+.ledger-main small { font-size: 10px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ledger-amt { font-size: 12px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.ledger-amt.in { color: var(--green); }
+.ledger-amt.out { color: var(--red); }
+.ledger-verdict { margin: 10px 0 0; font-size: 11px; }
+.ledger-verdict.ok { color: var(--green); }
+.ledger-verdict.bad { color: var(--red); }
+.sheet-history { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.sheet-history h3 { margin: 0 0 6px; font-size: 11px; color: var(--gold); }
+.sheet-history ul { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: 11px; color: var(--muted); }
+.sheet-history li { display: flex; justify-content: space-between; gap: 8px; }

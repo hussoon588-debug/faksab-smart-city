@@ -226,12 +226,32 @@ export function snapshotToState(snapshot, previous = {}) {
     };
   }
   const weekly = snapshot.weekly ?? {};
+  // The server references plots by uuid; the client speaks `district:plotNo`. Translate,
+  // so the plot sheet shows the same history in both modes.
+  const keyById = Object.fromEntries(Object.entries(plots).map(([key, plot]) => [plot.id, key]));
+  // The server sends its last 100 rows; newest first, same shape as the local ledger.
+  const ledger = Array.isArray(snapshot.ledger)
+    ? snapshot.ledger
+        .map((row, index) => ({
+          id: `s${row.id ?? index}`,
+          seq: Number(row.seq ?? index),
+          ts: Date.parse(row.ts ?? '') || Date.now(),
+          reason: typeof row.reason === 'string' ? row.reason : 'admin_adjustment',
+          amount: Number(row.amount ?? row.delta ?? 0),
+          balanceAfter: Number(row.balanceAfter ?? 0),
+          ref: typeof row.ref === 'string' ? keyById[row.ref] ?? row.ref : null
+        }))
+        .sort((a, b) => b.ts - a.ts || b.seq - a.seq)
+        .slice(0, 400)
+    : previous.ledger ?? [];
   return {
     ...previous,
     playerName: snapshot.player?.name ?? previous.playerName,
     cash: Number(snapshot.balance ?? 0),
     xp: Number(snapshot.player?.xp ?? 0),
     plots,
+    ledger,
+    ledgerSeq: Number(snapshot.ledgerSeq ?? ledger[0]?.seq ?? previous.ledgerSeq ?? 0),
     claims: snapshot.week ? { [snapshot.week]: [...(snapshot.claims ?? [])] } : previous.claims ?? {},
     week: {
       key: snapshot.week ?? previous.week?.key,

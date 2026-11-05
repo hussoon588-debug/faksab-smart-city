@@ -260,3 +260,77 @@ export function districtStats(state, district) {
 
 /** Assets the player may build right now (level gate only). */
 export const unlockedAssets = (level) => ASSET_TYPES.filter((asset) => asset.unlockLevel <= level);
+
+/* ----------------------------------------------------------------- ledger --- */
+
+/**
+ * Every movement of money has a reason, and the reasons are the same strings the
+ * database writes (`ofuq_ledger.reason`), so a local ledger and a server ledger read
+ * identically in the UI.
+ */
+export const LEDGER_REASONS = {
+  signup_bonus: { label: 'رصيد البداية', kind: 'in' },
+  opening_balance: { label: 'رصيد افتتاحي', kind: 'in' },
+  plot_purchase: { label: 'شراء قطعة', kind: 'out' },
+  development: { label: 'تطوير أصل', kind: 'out' },
+  upgrade: { label: 'ترقية أصل', kind: 'out' },
+  rent: { label: 'إيجار محصّل', kind: 'in' },
+  sale: { label: 'بيع أصل', kind: 'in' },
+  mission_reward: { label: 'مكافأة تحدي', kind: 'in' },
+  market_fee: { label: 'عمولة سوق', kind: 'out' },
+  admin_adjustment: { label: 'تعديل إداري', kind: 'in' }
+};
+
+export const ledgerLabel = (reason) => LEDGER_REASONS[reason]?.label ?? 'حركة غير معروفة';
+
+/** Totals for the wallet header. `net` is what the balance should have moved by. */
+export function ledgerTotals(entries = []) {
+  let inflow = 0;
+  let outflow = 0;
+  for (const entry of entries) {
+    const amount = Number(entry?.amount ?? 0);
+    if (amount >= 0) inflow += amount;
+    else outflow += -amount;
+  }
+  return { inflow, outflow, net: inflow - outflow, count: entries.length };
+}
+
+/** Entries that touched one plot — the plot sheet's own history. */
+export const plotLedger = (entries = [], key) => entries.filter((entry) => entry.ref === key);
+
+/**
+ * The ledger is trustworthy only if it explains the balance. The newest entry records the
+ * balance after it, so the two must agree; an empty ledger is trivially consistent only
+ * when the wallet is untouched.
+ */
+export function ledgerReconciles(entries = [], cash = 0) {
+  if (entries.length === 0) return true;
+  const newest = entries.reduce((latest, entry) => (entry.ts > latest.ts ? entry : latest), entries[0]);
+  return Number(newest.balanceAfter) === Number(cash);
+}
+
+/** Group newest-first entries by calendar day for the wallet list. */
+export function groupLedger(entries = [], now = Date.now()) {
+  const today = new Date(now);
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  const groups = new Map();
+  for (const entry of entries) {
+    const date = new Date(entry.ts);
+    const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+    const key = String(dayStart);
+    if (!groups.has(key)) {
+      const dayIndex = Math.round((startOfToday - dayStart) / DAY_MS);
+      const label =
+        dayIndex === 0
+          ? 'اليوم'
+          : dayIndex === 1
+            ? 'أمس'
+            : date.toLocaleDateString('ar', { day: 'numeric', month: 'long' });
+      groups.set(key, { key, label, entries: [], net: 0 });
+    }
+    const group = groups.get(key);
+    group.entries.push(entry);
+    group.net += Number(entry.amount ?? 0);
+  }
+  return [...groups.values()];
+}

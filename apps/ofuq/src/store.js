@@ -35,6 +35,19 @@ export function createInitialState(now = Date.now()) {
     xp: 0,
     plots: {},
     claims: {},
+    // Append-only in spirit: newest first, capped, and every row explains one balance move.
+    ledger: [
+      {
+        id: 'l1',
+        seq: 1,
+        ts: now,
+        reason: 'signup_bonus',
+        amount: ECONOMY.startCash,
+        balanceAfter: ECONOMY.startCash,
+        ref: null
+      }
+    ],
+    ledgerSeq: 1,
     week: { key: weekKey(new Date(now)), developed: 0, collected: 0, upgraded: 0, bought: 0 },
     stats: { collected: 0, developed: 0, upgraded: 0, sold: 0, earned: 0 },
     settings: { haptics: true }
@@ -73,6 +86,45 @@ export function migrate(raw, now = Date.now()) {
       lastCollectedAt: num(plot.lastCollectedAt, now)
     };
   }
+
+  const LEDGER_LIMIT = 400;
+  const rows = Array.isArray(raw.ledger) ? raw.ledger : [];
+  state.ledger = rows
+    .filter(
+      (row) =>
+        row &&
+        typeof row.reason === 'string' &&
+        Number.isFinite(Number(row.amount)) &&
+        Number.isFinite(Number(row.ts))
+    )
+    .map((row, index) => ({
+      id: String(row.id ?? `m${index + 1}`),
+      seq: int(row.seq, index + 1),
+      ts: num(row.ts, now),
+      reason: row.reason,
+      amount: Math.round(Number(row.amount)),
+      balanceAfter: Math.max(0, num(row.balanceAfter, 0)),
+      ref: typeof row.ref === 'string' ? row.ref : null
+    }))
+    .slice(0, LEDGER_LIMIT);
+
+  if (state.ledger.length === 0 && state.cash > 0) {
+    // A wallet that predates the ledger gets one honest opening row instead of a
+    // silent gap: everything before this date is simply not itemised.
+    state.ledger = [
+      {
+        id: 'l0',
+        seq: 0,
+        ts: num(raw.createdAt, now),
+        reason: 'opening_balance',
+        amount: state.cash,
+        balanceAfter: state.cash,
+        ref: null
+      }
+    ];
+  }
+  state.ledgerSeq = Math.max(int(raw.ledgerSeq, 0), ...state.ledger.map((row) => row.seq), 0);
+  state.ledger.sort((a, b) => b.ts - a.ts || b.seq - a.seq);
 
   for (const [week, ids] of Object.entries(raw.claims ?? {})) {
     if (Array.isArray(ids)) state.claims[week] = ids.filter((id) => typeof id === 'string');
@@ -149,6 +201,28 @@ export function createStore({ storage = browserStorage(), now = () => Date.now()
 
   const level = () => levelInfo(state.xp).level;
 
+  const LEDGER_LIMIT = 400;
+
+  /**
+   * One row per balance movement. Called *after* `state.cash` changed, so `balanceAfter`
+   * is the value the player sees; that is what makes the wallet reconcile.
+   */
+  function logLedger(reason, amount, ref = null) {
+    const delta = Math.round(Number(amount) || 0);
+    if (delta === 0) return;
+    state.ledgerSeq = int(state.ledgerSeq, 0) + 1;
+    state.ledger.unshift({
+      id: `l${state.ledgerSeq}`,
+      seq: state.ledgerSeq,
+      ts: now(),
+      reason,
+      amount: delta,
+      balanceAfter: Math.round(state.cash),
+      ref
+    });
+    if (state.ledger.length > LEDGER_LIMIT) state.ledger.length = LEDGER_LIMIT;
+  }
+
   const actions = {
     buy(districtId, plotNo) {
       rollWeek();
@@ -167,6 +241,7 @@ export function createStore({ storage = browserStorage(), now = () => Date.now()
       const stamp = now();
       state.cash -= price;
       state.plots[key] = { districtId: district.id, plotNo: no, assetId: null, level: 0, purchasedAt: stamp, lastCollectedAt: stamp };
+      logLedger('plot_purchase', -price, key);
       state.xp += ECONOMY.xp.buy;
       state.week.bought += 1;
       emit();
@@ -184,6 +259,7 @@ export function createStore({ storage = browserStorage(), now = () => Date.now()
       if (state.cash < asset.cost) return { ok: false, message: 'السيولة غير كافية لبناء هذا الأصل.' };
 
       state.cash -= asset.cost;
+      logLedger('development', -asset.cost, key);
       plot.assetId = asset.id;
       plot.level = 1;
       plot.lastCollectedAt = now();
@@ -203,6 +279,7 @@ export function createStore({ storage = browserStorage(), now = () => Date.now()
       if (state.cash < cost) return { ok: false, message: 'السيولة غير كافية للترقية.' };
 
       state.cash -= cost;
+      logLedger('upgrade', -cost, key);
       plot.level += 1;
       state.xp += ECONOMY.xp.upgrade;
       state.stats.upgraded += 1;
@@ -220,6 +297,7 @@ export function createStore({ storage = browserStorage(), now = () => Date.now()
 
       plot.lastCollectedAt = lastCollectedAt;
       state.cash += amount;
+      logLedger('rent', amount, key);
       state.xp += ECONOMY.xp.collect;
       state.stats.collected += 1;
       state.stats.earned += amount;
@@ -233,16 +311,20 @@ export function createStore({ storage = browserStorage(), now = () => Date.now()
       const stamp = now();
       let total = 0;
       let count = 0;
-      for (const plot of Object.values(state.plots)) {
+      const collected = [];
+      for (const [key, plot] of Object.entries(state.plots)) {
         const { amount, lastCollectedAt } = collectRent(plot, districtFor(plot.districtId), stamp);
         if (amount <= 0) continue;
         plot.lastCollectedAt = lastCollectedAt;
         total += amount;
         count += 1;
+        collected.push({ key, amount });
       }
       if (total <= 0) return { ok: false, message: 'لا يوجد إيجار جاهز للتحصيل.' };
 
       state.cash += total;
+      // One row per plot, so a player can see which building paid what.
+      for (const item of collected) logLedger('rent', item.amount, item.key);
       state.xp += ECONOMY.xp.collect * count;
       state.stats.collected += count;
       state.stats.earned += total;
@@ -260,6 +342,7 @@ export function createStore({ storage = browserStorage(), now = () => Date.now()
       const value = plotValue(plot, district);
       delete state.plots[key];
       state.cash += proceeds;
+      logLedger('sale', proceeds, key);
       state.xp += ECONOMY.xp.sell;
       state.stats.sold += 1;
       emit();
@@ -279,6 +362,7 @@ export function createStore({ storage = browserStorage(), now = () => Date.now()
 
       state.claims[week] = [...(state.claims[week] ?? []), challenge.id];
       state.cash += challenge.reward;
+      logLedger('mission_reward', challenge.reward, challenge.id);
       state.xp += challenge.xp;
       state.stats.earned += challenge.reward;
       emit();

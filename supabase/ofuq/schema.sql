@@ -300,6 +300,22 @@ begin
     'claims', coalesce((
       select jsonb_agg(c.mission_id) from public.ofuq_claims c
       where c.player_id = p.id and c.week_key = v_week
+    ), '[]'::jsonb),
+    -- The wallet screen can only prove the balance if it can read the movements.
+    'ledger', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', l.id,
+        'seq', l.id,
+        'ts', l.created_at,
+        'reason', l.reason,
+        'amount', l.delta,
+        'balanceAfter', l.balance_after,
+        'ref', l.ref_id
+      ) order by l.created_at desc, l.id desc)
+      from (
+        select * from public.ofuq_ledger where player_id = p.id
+        order by created_at desc, id desc limit 100
+      ) l
     ), '[]'::jsonb)
   ) into v_result
   from public.ofuq_players p

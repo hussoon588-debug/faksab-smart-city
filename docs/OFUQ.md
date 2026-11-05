@@ -61,6 +61,25 @@ The city is a 100-plot scene: five districts of twenty plots, positions derived 
 - The scene owns no game state: every frame is derived from a store snapshot, which is why
   local mode and server mode look identical.
 
+## The ledger
+
+Money is not a number that changes; it is the sum of movements. Every action that touches the
+balance writes exactly one row — `{ reason, amount, balanceAfter, ref, ts }` — in `state.ledger`
+(local mode) or comes back inside the server snapshot (`ofuq_ledger`, last 100 rows).
+
+- **Same vocabulary in both modes.** Reasons are the SQL strings: `signup_bonus`,
+  `plot_purchase`, `development`, `upgrade`, `rent`, `sale`, `mission_reward`, `market_fee`,
+  `admin_adjustment` — plus `opening_balance` for a wallet that predates the ledger.
+- **`balanceAfter` is the proof.** The wallet prints «الرصيد X — مطابق للسجل» by comparing the
+  newest row with the balance. If they ever disagree the screen says so instead of hiding it.
+- **`ref` ties a row to a plot**, so the plot sheet shows its own history (purchase, works,
+  upgrades, every rent collection) and a sold plot keeps its record.
+- `collectAll` writes **one row per building**, so a lump sum never hides which asset paid what.
+- The list is capped at 400 rows locally (storage safety) and grouped by day with a per-day net;
+  filters are «الكل / داخل / خارج / إيجار».
+- A pre-ledger save is migrated to a single `opening_balance` row dated at the wallet's creation
+  rather than pretending the history exists.
+
 Vendoring: `vendor/three.module.min.js` (r150.1, MIT, 154 KB gzipped) is committed because the
 app ships as plain ES modules with no bundler and must stay offline-capable. See
 `apps/ofuq/vendor/README.md` for the exact provenance and the upgrade procedure.
@@ -80,7 +99,7 @@ What exists:
 | Schema | `supabase/ofuq/schema.sql` | catalogs, wallets, append-only ledger, plots, weekly stats, missions, RLS + 6 game RPCs |
 | Client adapter | `apps/ofuq/src/remote.js` | dependency-free `fetch` wrapper over the RPCs; maps failures to player-safe Arabic |
 | Store seam | `apps/ofuq/src/store.js` | `dispatch()` sends **intent only** in server mode and adopts the returned snapshot |
-| Contract test | `tests/ofuq/remote.test.mjs` | in-memory fake that mirrors the SQL (auth, ownership, idempotency, economics) |
+| Contract test | `tests/ofuq/remote.test.mjs` | in-memory fake that mirrors the SQL (auth, ownership, idempotency, economics, ledger) |
 
 Rules the backend enforces (never the browser):
 

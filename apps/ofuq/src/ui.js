@@ -13,6 +13,11 @@ import {
   districtStats,
   formatCompact,
   formatNumber,
+  groupLedger,
+  ledgerLabel,
+  ledgerReconciles,
+  ledgerTotals,
+  plotLedger,
   hourlyIncome,
   leaderboard,
   netWorth,
@@ -60,6 +65,7 @@ export function mount(store) {
     settingsOpen: false,
     // City view: `city` is the WebGL scene once (and only if) it exists.
     filter: 'all',
+    ledgerFilter: 'all',
     city: null,
     cityStatus: 'idle',
     cityModel: null
@@ -105,6 +111,7 @@ export function mount(store) {
     renderCity(snap);
     renderCityMap(snap);
     renderPortfolio(snap);
+    renderLedger(snap);
     renderLeague(snap);
     if (view.sheetKey) renderSheet(snap);
     renderSettingsState();
@@ -358,6 +365,103 @@ export function mount(store) {
       .join('');
   }
 
+  /* ---------------------------------------------------------------- wallet --- */
+
+  const LEDGER_FILTERS = [
+    { id: 'all', label: 'الكل' },
+    { id: 'in', label: 'داخل' },
+    { id: 'out', label: 'خارج' },
+    { id: 'rent', label: 'إيجار' }
+  ];
+
+  const ledgerMatches = (entry, filter) => {
+    if (filter === 'in') return entry.amount > 0;
+    if (filter === 'out') return entry.amount < 0;
+    if (filter === 'rent') return entry.reason === 'rent';
+    return true;
+  };
+
+  const clock = (ts) => {
+    try {
+      return new Date(ts).toLocaleTimeString('ar', { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return '';
+    }
+  };
+
+  /** Where the money went: the plot code when the row references one. */
+  function ledgerSubtitle(entry) {
+    if (!entry.ref) return clock(entry.ts);
+    if (String(entry.ref).includes(':')) {
+      const [districtId, no] = String(entry.ref).split(':');
+      const district = districtFor(districtId);
+      return `${district?.name ?? districtId} · قطعة ${no} · ${clock(entry.ts)}`;
+    }
+    return `${entry.ref} · ${clock(entry.ts)}`;
+  }
+
+  function renderLedger(snap) {
+    const { state } = snap;
+    const entries = Array.isArray(state.ledger) ? state.ledger : [];
+    const list = $('ledgerList');
+    const node = $('ledgerState');
+    if (!list || !node) return;
+
+    $('ledgerFilters').innerHTML = LEDGER_FILTERS.map(
+      (filter) =>
+        `<button type="button" data-ledger="${filter.id}" class="${filter.id === view.ledgerFilter ? 'is-active' : ''}" aria-pressed="${filter.id === view.ledgerFilter}">${filter.label}</button>`
+    ).join('');
+
+    const totals = ledgerTotals(entries);
+    const reconciles = ledgerReconciles(entries, state.cash);
+    node.textContent = `+${formatCompact(totals.inflow)} / −${formatCompact(totals.outflow)}`;
+
+    const visible = entries.filter((entry) => ledgerMatches(entry, view.ledgerFilter));
+    $('ledgerEmpty').hidden = visible.length > 0;
+    list.innerHTML = groupLedger(visible)
+      .map((group) => {
+        const sign = group.net >= 0 ? 'pos' : 'neg';
+        const rows = group.entries
+          .map((entry) => {
+            const kind = entry.amount >= 0 ? 'in' : 'out';
+            return `<li class="ledger-row">
+              <span class="ledger-ico ${kind}" aria-hidden="true">${kind === 'in' ? '↓' : '↑'}</span>
+              <span class="ledger-main">
+                <b>${escapeHtml(ledgerLabel(entry.reason))}</b>
+                <small>${escapeHtml(ledgerSubtitle(entry))}</small>
+              </span>
+              <span class="ledger-amt ${kind}">${entry.amount > 0 ? '+' : '−'}${formatNumber(Math.abs(entry.amount))}</span>
+            </li>`;
+          })
+          .join('');
+        return `<div class="ledger-day"><span>${escapeHtml(group.label)}</span>
+          <b class="${sign}">${group.net >= 0 ? '+' : '−'}${formatNumber(Math.abs(group.net))}</b></div>
+          <ul class="ledger-rows">${rows}</ul>`;
+      })
+      .join('');
+
+    // The point of the ledger: if it does not explain the balance, say so out loud.
+    const verdict = document.createElement('p');
+    verdict.className = `ledger-verdict ${reconciles ? 'ok' : 'bad'}`;
+    verdict.textContent = reconciles
+      ? `الرصيد ${formatNumber(state.cash)} — مطابق للسجل.`
+      : 'تنبيه: السجل لا يطابق الرصيد. أعد مزامنة المدينة قبل أي عملية.';
+    list.append(verdict);
+  }
+
+  function renderPlotHistory(key, state) {
+    const entries = plotLedger(Array.isArray(state.ledger) ? state.ledger : [], key).slice(0, 4);
+    if (entries.length === 0) return '';
+    const rows = entries
+      .map(
+        (entry) =>
+          `<li><span>${escapeHtml(ledgerLabel(entry.reason))}</span>
+           <span class="${entry.amount >= 0 ? 'ledger-amt in' : 'ledger-amt out'}">${entry.amount > 0 ? '+' : '−'}${formatNumber(Math.abs(entry.amount))}</span></li>`
+      )
+      .join('');
+    return `<div class="sheet-history"><h3>سجل هذه القطعة</h3><ul>${rows}</ul></div>`;
+  }
+
   function renderLeague(snap) {
     const { state } = snap;
     const rows = leaderboard(state);
@@ -437,7 +541,8 @@ export function mount(store) {
         <div class="kv"><span>أقل دخل بعد التطوير</span><b>${formatNumber(plotRent({ assetId: ASSET_TYPES[0].id, level: 1 }, district))} / ساعة</b></div>
         <button type="button" class="btn btn-gold" data-action="buy" ${locked || state.cash < price ? 'disabled' : ''}>
           ${locked ? `يُفتح في المستوى ${district.unlockLevel}` : state.cash < price ? 'السيولة غير كافية' : `شراء القطعة · ${formatNumber(price)}`}
-        </button>`;
+        </button>
+        ${renderPlotHistory(key, state)}`;
       return;
     }
 
@@ -459,7 +564,8 @@ export function mount(store) {
       }).join('');
       $('sheetBody').innerHTML = `
         <p class="sheet-note">القطعة مملوكة وتنتظر التطوير. اختر نوع الأصل — كل مستوى إضافي يرفع الإيجار ${Math.round(ECONOMY.upgradeIncomeRate * 100)}%.</p>
-        ${options}`;
+        ${options}
+        ${renderPlotHistory(key, state)}`;
       return;
     }
 
@@ -479,7 +585,8 @@ export function mount(store) {
       <button type="button" class="btn btn-ghost" data-action="upgrade" ${plot.level < ECONOMY.maxLevel && state.cash >= upgrade ? '' : 'disabled'}>
         ${plot.level >= ECONOMY.maxLevel ? 'أعلى مستوى' : `ترقية إلى المستوى ${plot.level + 1} · ${formatNumber(upgrade)}`}
       </button>
-      <button type="button" class="btn btn-danger" data-action="sell">بيع القطعة</button>`;
+      <button type="button" class="btn btn-danger" data-action="sell">بيع القطعة</button>
+      ${renderPlotHistory(key, state)}`;
   }
 
   /* -------------------------------------------------------------- settings */
@@ -634,10 +741,16 @@ export function mount(store) {
   }
 
   document.addEventListener('click', (event) => {
-    const target = event.target.closest('[data-view],[data-district],[data-plot],[data-claim],[data-action],[data-filter],#collectAll,#settingsBtn,#sheetClose,#settingsClose,#saveName,#hapticsToggle,#resetGame,#scrim');
+    const target = event.target.closest('[data-view],[data-district],[data-plot],[data-claim],[data-action],[data-filter],[data-ledger],#collectAll,#settingsBtn,#sheetClose,#settingsClose,#saveName,#hapticsToggle,#resetGame,#scrim');
     if (!target) return;
 
     if (target.dataset.view) return switchView(target.dataset.view);
+
+    if (target.dataset.ledger) {
+      view.ledgerFilter = target.dataset.ledger;
+      vibrate(4);
+      return render();
+    }
 
     if (target.dataset.filter) {
       view.filter = target.dataset.filter;
