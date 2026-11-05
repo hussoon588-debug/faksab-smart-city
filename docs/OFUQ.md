@@ -110,6 +110,13 @@ Mirror the existing seam instead of inventing a new one:
 4. Extend the fake in `tests/ofuq/remote.test.mjs` first — a rule that is not reachable in the
    fake is a rule the player will find for you in production.
 
+## Documents
+
+- `docs/OFUQ_BUILD_PROMPT.md` — the copy-paste build brief (identity, architecture, RPC
+  contract, economy constants, screens, 20 hard rules, staged acceptance criteria).
+- `docs/OFUQ_GAP_ANALYSIS.md` — what the published build has, what is wrong with it, and the
+  remaining gap against this repository (including the open 3D decision).
+
 ## Roadmap
 
 - Per-device ↔ account migration (import a local wallet into a signed-in account).
