@@ -129,6 +129,9 @@ export function mount(store) {
 
   function renderHeader(snap) {
     const { state } = snap;
+    // The build is on screen, so "did my update arrive?" is answerable at a glance.
+    const version = $('buildVersion');
+    if (version && version.textContent !== APP.version) version.textContent = `v${APP.version}`;
     const pending = Object.values(snap.pending).reduce((sum, value) => sum + value, 0);
     const readyCount = Object.values(snap.pending).filter((value) => value > 0).length;
 

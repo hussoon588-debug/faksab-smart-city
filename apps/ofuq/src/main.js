@@ -56,8 +56,20 @@ window.addEventListener('error', (event) => {
 // under the GitHub Pages subpath.
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').then((registration) => {
-      registration.addEventListener('updatefound', () => registration.update().catch(() => {}));
-    }).catch((error) => console.warn('[ofuq] service worker', error));
+    navigator.serviceWorker
+      .register('./sw.js')
+      .then((registration) => {
+        registration.addEventListener('updatefound', () => registration.update().catch(() => {}));
+        // Check for a newer build on every visit; a stale cache must never look like
+        // "nothing has been developed".
+        registration.update().catch(() => {});
+      })
+      .catch((error) => console.warn('[ofuq] service worker', error));
+
+    // A new worker taking control means the files on disk changed. Say it out loud
+    // instead of reloading under the player's finger.
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      ui.toast(`تم تحديث المدينة إلى نسخة ${APP.version} — أعد التحميل لرؤية الجديد.`, 'ok');
+    });
   });
 }
