@@ -1,0 +1,40 @@
+name: Bug report
+description: Something is broken in FAKSAB SMART CITY or OFUQ
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please do not report security problems here — use a private security advisory (see SECURITY.md).
+  - type: dropdown
+    id: app
+    attributes:
+      label: Which app?
+      options:
+        - FAKSAB SMART CITY
+        - OFUQ
+        - Shared world / Supabase
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Include the exact step sequence, and what you expected instead.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Device / browser
+      placeholder: e.g. iPhone 13, Safari 18 / Chrome 130 on Android 14
+    validations:
+      required: true
+  - type: textarea
+    id: console
+    attributes:
+      label: Console or network errors
+      description: Paste anything red from DevTools, or the on-screen error message.
+      render: shell
+    validations:
+      required: false

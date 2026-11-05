@@ -1,0 +1,33 @@
+{
+  "$comment": "Single source of truth for the deployable web apps in this repository. tools/check.mjs and tools/build.mjs read this file; keep versions in sync with each app's manifest.",
+  "apps": [
+    {
+      "id": "faksab",
+      "label": "FAKSAB SMART CITY",
+      "version": "8.2.4",
+      "root": ".",
+      "entry": "index.html",
+      "manifest": "manifest.json",
+      "serviceWorker": "sw.js",
+      "publishedBasePath": "/faksab-smart-city/",
+      "requiredFiles": [
+        "index.html",
+        "manifest.json",
+        "sw.js",
+        "icon-192.png",
+        "icon-512.png"
+      ],
+      "copy": [
+        "index.html",
+        "manifest.json",
+        "sw.js",
+        "icon-192.png",
+        "icon-512.png",
+        "reset.html",
+        "setup.html",
+        "vendor",
+        "src/supabase-world.js"
+      ]
+    }
+  ]
+}

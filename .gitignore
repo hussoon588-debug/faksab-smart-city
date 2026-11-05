@@ -6,3 +6,15 @@ build/
 .DS_Store
 __pycache__/
 *.pyc
+
+# Node tooling / build output
+node_modules/
+dist/
+*.log
+.env
+.env.*
+
+# Local editor / OS noise
+.vscode/
+.idea/
+Thumbs.db

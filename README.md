@@ -31,5 +31,28 @@ step.
 
 ## Local run
 
-Any static server over the folder, e.g. `python3 -m http.server 8000`, then open
-`http://localhost:8000/`. Service worker requires `http://` or `https://`.
+```bash
+npm run dev        # → http://localhost:8000/          (FAKSAB)
+                   # → http://localhost:8000/apps/ofuq/  (OFUQ)
+```
+
+No install step is required: the tooling uses Node.js built-ins only
+(`node >= 20.11`, see `.nvmrc`). Any static server works too, e.g.
+`python3 -m http.server 8000`. Service workers require `http://` or `https://`.
+
+## Checks, build and CI
+
+| Command | Purpose |
+| --- | --- |
+| `npm run check` | Static audit (markup, ids, references, manifests, service workers, JS/CSS syntax, secrets). |
+| `npm test` | Unit + build tests (`node --test`), no network access. |
+| `npm run build` | Audit, then assemble `dist/` with `dist/build-info.json` (commit + file hashes). |
+| `npm run verify` | `check && test && build` — run before pushing. |
+
+Apps, versions and publish paths live in `config/apps.json`; the audit fails when a
+manifest version or a service worker cache name drifts from it. CI runs the same gates on
+every push and pull request (`.github/workflows/ci.yml`).
+
+Read [`docs/PRODUCTION.md`](docs/PRODUCTION.md) for the deployment model, GitHub Pages rules
+(relative paths only) and the security boundaries, and [`CONTRIBUTING.md`](CONTRIBUTING.md)
+before changing the schema or shipping a release.
