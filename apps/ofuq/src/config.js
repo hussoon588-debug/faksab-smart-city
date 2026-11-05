@@ -19,9 +19,13 @@ export const APP = {
   // Where the app is published from. Relative so the same build works locally,
   // under /apps/ofuq/ on GitHub Pages, and at a domain root.
   backend: {
-    // The shell is local-first. A synchronised backend (Supabase, mirroring
-    // supabase/schema.sql) plugs in through `src/store.js` without touching the UI.
-    mode: 'local'
+    // 'local'    → offline shell: the wallet lives on this device only.
+    // 'supabase' → the server owns balance, ownership and income
+    //              (apply supabase/ofuq/schema.sql, then fill the two fields below).
+    // The UI is identical in both modes; only `store.dispatch` changes behaviour.
+    mode: 'local',
+    supabaseUrl: '',
+    publishableKey: ''
   }
 };
 

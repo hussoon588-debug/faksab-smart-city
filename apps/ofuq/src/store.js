@@ -6,6 +6,7 @@
  * has to re-derive why something failed. The store is the only place that writes.
  */
 import { APP, ECONOMY, DISTRICTS } from './config.js';
+import { createIdempotencyKey, snapshotToState } from './remote.js';
 import {
   assetFor,
   challengeBoard,
@@ -110,7 +111,7 @@ function browserStorage() {
   }
 }
 
-export function createStore({ storage = browserStorage(), now = () => Date.now(), onError = () => {} } = {}) {
+export function createStore({ storage = browserStorage(), now = () => Date.now(), onError = () => {}, remote = null } = {}) {
   const listeners = new Set();
   let state;
   let ephemeral = Boolean(storage.ephemeral);
@@ -311,6 +312,122 @@ export function createStore({ storage = browserStorage(), now = () => Date.now()
     }
   };
 
+  /** Replace server-owned fields with the authoritative snapshot (remote mode). */
+  function applySnapshot(snapshot) {
+    const next = snapshotToState(snapshot, state);
+    if (!next) return false;
+    state = next;
+    emit();
+    return true;
+  }
+
+  const localHandlers = {
+    buy: ({ districtId, plotNo }) => actions.buy(districtId, plotNo),
+    develop: ({ plotKey: key, assetId }) => actions.develop(key, assetId),
+    upgrade: ({ plotKey: key }) => actions.upgrade(key),
+    collect: ({ plotKey: key }) => actions.collect(key),
+    collectAll: () => actions.collectAll(),
+    sell: ({ plotKey: key }) => actions.sell(key),
+    claim: ({ challengeId }) => actions.claim(challengeId),
+    setName: ({ name }) => actions.setName(name),
+    toggleHaptics: () => actions.toggleHaptics(),
+    reset: () => actions.reset()
+  };
+
+  /**
+   * Single entry point used by the UI. In local mode it runs the local reducer; in
+   * server mode it sends *intent only* (plus an idempotency key) and adopts whatever
+   * snapshot the server returns. The UI code does not change between modes.
+   */
+  function dispatch(type, payload = {}) {
+    const local = localHandlers[type];
+    if (!local) return { ok: false, message: `إجراء غير معروف: ${type}` };
+    // Local mode stays synchronous, so the UI renders in the same tick.
+    return remote ? dispatchRemote(type, payload) : local(payload);
+  }
+
+  async function dispatchRemote(type, payload = {}) {
+    const local = localHandlers[type];
+    const before = state.cash;
+    const plotFor = () => state.plots[payload.plotKey] ?? null;
+
+    try {
+      let result;
+      switch (type) {
+        case 'buy':
+          result = await remote.purchasePlot({
+            districtId: payload.districtId,
+            plotNo: payload.plotNo,
+            idempotencyKey: payload.idempotencyKey ?? createIdempotencyKey('purchase')
+          });
+          break;
+        case 'develop':
+        case 'upgrade':
+        case 'collect':
+        case 'sell': {
+          const plot = plotFor();
+          if (!plot?.id) return { ok: false, message: 'هذه القطعة غير مسجّلة على الخادم بعد.' };
+          const call = { develop: 'developPlot', upgrade: 'upgradePlot', collect: 'collectRent', sell: 'sellPlot' }[type];
+          result = await remote[call]({
+            plotId: plot.id,
+            assetId: payload.assetId,
+            idempotencyKey: payload.idempotencyKey ?? createIdempotencyKey(type)
+          });
+          break;
+        }
+        case 'collectAll': {
+          const ready = Object.values(state.plots).filter((plot) => plot.id);
+          if (ready.length === 0) return { ok: false, message: 'لا يوجد إيجار جاهز للتحصيل.' };
+          let collected = 0;
+          for (const plot of ready) {
+            const one = await remote.collectRent({ plotId: plot.id, idempotencyKey: createIdempotencyKey('collect') });
+            if (one.ok && one.snapshot) applySnapshot(one.snapshot);
+            else if (one.message && !/لم يتراكم/.test(one.message)) return { ok: false, message: one.message };
+            else collected += 1;
+          }
+          if (collected === 0) return { ok: false, message: 'لا يوجد إيجار جاهز للتحصيل.' };
+          return { ok: true, message: `تم تحصيل ${(state.cash - before).toLocaleString(APP.numberLocale)} عملة.` };
+        }
+        case 'claim':
+          result = await remote.claimMission({
+            missionId: payload.challengeId,
+            idempotencyKey: payload.idempotencyKey ?? createIdempotencyKey('claim')
+          });
+          break;
+        case 'setName':
+          // Profile text is local; the server keeps the display name it was created with.
+          return local(payload);
+        default:
+          return local(payload);
+      }
+
+      if (!result.ok) return { ok: false, message: result.message || 'تعذر تنفيذ الطلب.' };
+      if (result.snapshot) applySnapshot(result.snapshot);
+
+      const gained = state.cash - before;
+      const messages = {
+        buy: `تملك قطعة ${payload.plotNo} — طوّرها لتبدأ الدخل.`,
+        develop: 'تم تطوير الأصل — يبدأ الإيجار بالتراكم.',
+        upgrade: 'تمت الترقية.',
+        collect: `تم تحصيل ${gained.toLocaleString(APP.numberLocale)} عملة.`,
+        sell: `تم البيع بـ ${gained.toLocaleString(APP.numberLocale)} عملة.`,
+        claim: `تم استلام مكافأة التحدي (${gained.toLocaleString(APP.numberLocale)} عملة).`
+      };
+      return { ok: true, message: messages[type] ?? 'تم التنفيذ.' };
+    } catch (error) {
+      onError('تعذر إكمال العملية على الخادم.', error);
+      return { ok: false, message: error?.message || 'تعذر الاتصال بالمدينة المشتركة.' };
+    }
+  }
+
+  async function syncFromServer() {
+    if (!remote?.snapshot) return { ok: false, message: 'لا يوجد خادم مُهيّأ.' };
+    const result = await remote.snapshot();
+    if (!result.ok) return result;
+    applySnapshot(result.snapshot);
+    return { ok: true, message: 'تمت مزامنة المدينة.' };
+  }
+
   rollWeek();
   persist();
 
@@ -322,6 +439,16 @@ export function createStore({ storage = browserStorage(), now = () => Date.now()
     get ephemeral() {
       return ephemeral;
     },
+    /** 'local' (offline shell) or 'supabase' (server owns balance + ownership). */
+    get mode() {
+      return remote ? 'supabase' : 'local';
+    },
+    get remote() {
+      return remote;
+    },
+    dispatch,
+    syncFromServer,
+    applySnapshot,
     subscribe(listener) {
       listeners.add(listener);
       listener(state);

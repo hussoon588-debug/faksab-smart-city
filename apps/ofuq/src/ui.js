@@ -62,7 +62,13 @@ export function mount(store) {
     toastTimer = setTimeout(() => node.classList.remove('is-open'), 2600);
   }
 
+  // Local mode answers synchronously, server mode answers with a promise. This keeps
+  // click handlers synchronous in local mode (a tap still closes its sheet in the same tick).
+  const after = (result, run) => (result && typeof result.then === 'function' ? result.then(run) : run(result));
+
+  // Actions may be synchronous (local mode) or promises (server mode).
   const act = (result, haptic = 12) => {
+    if (result && typeof result.then === 'function') return result.then((resolved) => act(resolved, haptic));
     if (result?.message) toast(result.message, result.ok ? 'ok' : 'bad');
     if (result?.ok) vibrate(haptic);
     return result;
@@ -104,7 +110,10 @@ export function mount(store) {
 
     $('citySummary').textContent = `${Object.keys(state.plots).length} قطعة من ${DISTRICTS.reduce((sum, d) => sum + d.plots, 0)}`;
     $('versionLabel').textContent = `${APP.nameEn} ${APP.version}`;
-    $('modeLabel').textContent = APP.backend.mode === 'local' ? 'محلي' : APP.backend.mode;
+    const serverMode = store.mode === 'supabase';
+    $('modeLabel').textContent = serverMode
+      ? store.remote?.signedIn ? 'مدينة مشتركة' : 'خادم · بحاجة لتسجيل الدخول'
+      : 'وضع محلي';
     $('storageWarn').hidden = !store.ephemeral;
   }
 
@@ -382,11 +391,10 @@ export function mount(store) {
 
     if (target.dataset.plot) return openSheet(target.dataset.plot);
 
-    if (target.dataset.claim) return act(store.claim(target.dataset.claim), 30);
+    if (target.dataset.claim) return act(store.dispatch('claim', { challengeId: target.dataset.claim }), 30);
 
     if (target.id === 'collectAll') {
-      const result = store.collectAll();
-      return act(result, 18);
+      return act(store.dispatch('collectAll'), 18);
     }
 
     if (target.id === 'settingsBtn') return openSettings();
@@ -398,12 +406,14 @@ export function mount(store) {
     }
 
     if (target.id === 'saveName') {
-      const result = store.setName($('playerName').value);
-      if (result.ok) closeSettings();
-      return act(result);
+      const result = store.dispatch('setName', { name: $('playerName').value });
+      return act(after(result, (resolved) => {
+        if (resolved?.ok) closeSettings();
+        return resolved;
+      }));
     }
 
-    if (target.id === 'hapticsToggle') return act(store.toggleHaptics());
+    if (target.id === 'hapticsToggle') return act(store.dispatch('toggleHaptics'));
 
     if (target.id === 'resetGame') {
       if (!resetArmed) {
@@ -417,7 +427,7 @@ export function mount(store) {
       }
       resetArmed = false;
       target.textContent = 'حذف التقدم والبدء من جديد';
-      const result = store.reset();
+      const result = store.dispatch('reset');
       closeSettings();
       return act(result);
     }
@@ -427,16 +437,18 @@ export function mount(store) {
       let result = { ok: false, message: '' };
       if (action === 'buy') {
         const [districtId, no] = view.sheetKey.split(':');
-        result = store.buy(districtId, Number(no));
+        result = store.dispatch('buy', { districtId, plotNo: Number(no) });
       } else if (action === 'develop') {
-        result = store.develop(view.sheetKey, target.dataset.asset);
+        result = store.dispatch('develop', { plotKey: view.sheetKey, assetId: target.dataset.asset });
       } else if (action === 'upgrade') {
-        result = store.upgrade(view.sheetKey);
+        result = store.dispatch('upgrade', { plotKey: view.sheetKey });
       } else if (action === 'collect') {
-        result = store.collect(view.sheetKey);
+        result = store.dispatch('collect', { plotKey: view.sheetKey });
       } else if (action === 'sell') {
-        result = store.sell(view.sheetKey);
-        if (result.ok) closeSheet();
+        result = after(store.dispatch('sell', { plotKey: view.sheetKey }), (resolved) => {
+          if (resolved?.ok) closeSheet();
+          return resolved;
+        });
       }
       return act(result);
     }

@@ -3,11 +3,28 @@
  * Boots the store, mounts the UI and registers the (scope-relative) service worker.
  */
 import { APP } from './config.js';
+import { createSupabaseBackend } from './remote.js';
 import { createStore } from './store.js';
 import { mount } from './ui.js';
 
 const bootErrors = [];
+
+// Server mode is opt-in: without a configured project the app stays a local shell,
+// and nothing silently pretends to be synced.
+let remote = null;
+if (APP.backend.mode === 'supabase' && APP.backend.supabaseUrl && APP.backend.publishableKey) {
+  try {
+    remote = createSupabaseBackend({
+      url: APP.backend.supabaseUrl,
+      publishableKey: APP.backend.publishableKey
+    });
+  } catch (error) {
+    bootErrors.push({ message: 'تعذر تهيئة المدينة المشتركة — نعمل محلياً.', error });
+  }
+}
+
 const store = createStore({
+  remote,
   onError: (message, error) => {
     bootErrors.push({ message, error });
     console.warn('[ofuq]', message, error);

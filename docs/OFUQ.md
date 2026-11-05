@@ -41,19 +41,74 @@ All numbers live in `src/config.js` (`ECONOMY`, `LEVELS`, `DISTRICTS`, `ASSET_TY
 - The DOM smoke test (`tests/ofuq/ui.smoke.test.mjs`) boots the real `index.html` in jsdom and
   walks the whole loop. `jsdom` is the only dev dependency; without it the suite skips.
 
-## Adding a backend (the sync seam)
+## The shared city (server-authoritative mode)
 
-The shell is deliberately local-first (`APP.backend.mode === 'local'`). To synchronise
-between devices, mirror the FAKSAB approach:
+The game ships in **local mode** (`APP.backend.mode === 'local'`). A complete
+server-authoritative backend is included and tested, but it is **opt-in**: nothing changes at
+runtime until it is configured. The footer badge states which mode is active («وضع محلي»,
+«خادم · بحاجة لتسجيل الدخول», «مدينة مشتركة»), and the shell carries the «قيمة افتراضية داخل
+اللعبة» disclaimer in every mode.
 
-1. Create the tables/functions in Supabase (see `supabase/schema.sql` for the RLS pattern:
-   clients get `select` only, every write goes through a `security definer` RPC).
-2. Add the project URL + publishable key to a new `src/remote.js`; never ship a
-   `service_role` key (the audit fails the build if one appears).
-3. Extend `store.js`: keep the optimistic local mutation, then push it through the RPC and
-   reconcile on `realtime` events. Actions already funnel through one place, so the UI does
-   not change.
-4. Flip `APP.backend.mode` and update the footer badge.
+What exists:
+
+| Piece | File | Notes |
+| --- | --- | --- |
+| Schema | `supabase/ofuq/schema.sql` | catalogs, wallets, append-only ledger, plots, weekly stats, missions, RLS + 6 game RPCs |
+| Client adapter | `apps/ofuq/src/remote.js` | dependency-free `fetch` wrapper over the RPCs; maps failures to player-safe Arabic |
+| Store seam | `apps/ofuq/src/store.js` | `dispatch()` sends **intent only** in server mode and adopts the returned snapshot |
+| Contract test | `tests/ofuq/remote.test.mjs` | in-memory fake that mirrors the SQL (auth, ownership, idempotency, economics) |
+
+Rules the backend enforces (never the browser):
+
+- **Money moves only inside the database.** Every mutation writes one `ofuq_ledger` row inside a
+  transaction; `ofuq_apply_balance` is the only place a balance changes.
+- **Idempotency.** Each mutating RPC takes `p_idempotency` and `ofuq_ledger` has
+  `unique(player_id, idempotency_key)`. A retried request is a no-op that returns the current
+  snapshot instead of failing or double-charging.
+- **Server-side economics.** Price, rent, upgrade cost, sale value and the 8-hour rent cap are
+  computed in SQL — the same formulas `core.js` uses offline, duplicated on purpose so the
+  client can never propose a price.
+- **Validation.** Ownership, district unlock level and available balance are checked in the
+  transaction (`for update`), so two tabs cannot buy the same plot.
+- **Read access.** RLS gives `authenticated` a `select` on the public map and self-scoped reads
+  of its own rows; `ofuq_plots` is public-read so the shared map renders before sign-in.
+  Only `authenticated` may execute the RPCs, and no `service_role` key ever reaches the client.
+
+### Turning it on
+
+1. Create a Supabase project, open the SQL editor and run `supabase/ofuq/schema.sql` once.
+   It is idempotent (`create or replace`, `on conflict do nothing`) and seeds the five
+   districts and their 100 plots.
+2. In `apps/ofuq/src/config.js` set `backend.mode = 'supabase'`, `supabaseUrl` and
+   `publishableKey` (the **publishable/anon** key — the audit fails the build if a
+   `service_role` key appears in any file).
+3. `npm run verify` — the schema and adapter are contract-tested against the same fake server.
+4. Sign-in: the adapter already exposes `signUp` / `signIn` / `restoreSession` / `signOut`, but
+   **no login screen is mounted yet**. In server mode the app therefore boots as «بحاجة لتسجيل
+   الدخول» and every write returns «سجّل الدخول للمشاركة في المدينة المشتركة.» until a session
+   exists. That is deliberate: no fake buttons, no silent fallbacks.
+
+### What is *not* built yet
+
+- Sign-in / sign-up UI, session expiry UX and account linking (the adapter supports them).
+- Realtime presence or push of other players' actions (the map refreshes on request only).
+- Player-to-player market, rentals/offers, missions beyond `ofuq_missions` seeds, and the
+  admin console. The ledger already has `mission_reward`, `market_fee` and `admin_adjustment`
+  reasons so those flows can be added without a migration of history.
+- The SQL has been validated by review and by the fake server, **not executed against a live
+  Postgres** — no database is available in the build sandbox.
+
+## Adding more server actions
+
+Mirror the existing seam instead of inventing a new one:
+
+1. Add the RPC in `supabase/ofuq/schema.sql` — `security definer`, `set search_path = public`,
+   `revoke all` then `grant execute to authenticated`, take `p_idempotency`, write exactly one
+   ledger row, and `return public.ofuq_snapshot()`.
+2. Call it from `apps/ofuq/src/remote.js` through `guarded(...)`, and expose one method.
+3. Route the intent from `store.dispatch()`; the UI needs no change.
+4. Extend the fake in `tests/ofuq/remote.test.mjs` first — a rule that is not reachable in the
+   fake is a rule the player will find for you in production.
 
 ## Roadmap
 

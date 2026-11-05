@@ -71,8 +71,13 @@ manual (`workflow_dispatch`) and only works after the Pages source is switched t
 - `service_role`, the database password and signing keys never enter this repository.
   `signing/` is git-ignored and the audit fails the build if a service key appears in any text
   file.
-- Ownership and balances are server-managed: clients have `select` only on `plots`, and all
-  writes go through the `purchase_plot` RPC.
+- Ownership and balances are server-managed in OFUQ: `supabase/ofuq/schema.sql` gives clients
+  `select` only, and every write goes through an `ofuq_*` RPC that validates ownership, level
+  and balance inside a transaction. `p_idempotency` + `unique(player_id, idempotency_key)` makes
+  retries safe, so a dropped response can never charge twice.
+- Deploying the backend is one paste into the Supabase SQL editor plus three fields in
+  `apps/ofuq/src/config.js`; the app stays in local mode until then. Never put `service_role`
+  or the database password in the client — the audit fails on both.
 
 ## Release checklist
 
@@ -82,6 +87,8 @@ manual (`workflow_dispatch`) and only works after the Pages source is switched t
 4. CI is green on the pull request.
 5. Merge to `main` (squash) — branch-based Pages deployment picks it up on the next build.
 6. Verify the live URL on a phone: install prompt, offline reload, and the shared-world panel.
+7. If OFUQ runs in server mode, confirm the footer badge reads «مدينة مشتركة» and that one real
+   action (buy → develop → collect) lands in `ofuq_ledger` exactly once.
 
 ## Rollback
 

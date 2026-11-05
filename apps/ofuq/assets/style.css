@@ -360,6 +360,19 @@ body::after {
 .toast.is-open { opacity: 1; transform: none; }
 .toast.is-bad { background: rgba(46, 14, 18, 0.96); border-color: rgba(255, 92, 108, 0.55); color: #ffd6da; }
 
+/* -------------------------------------------------------------- disclaimer */
+.disclaimer {
+  margin: 14px 2px 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 10.5px;
+  line-height: 1.9;
+  color: #93a7c6;
+  background: rgba(4, 12, 28, 0.5);
+  border: 1px dashed rgba(126, 232, 255, 0.2);
+}
+.disclaimer b { color: #cfe3ff; }
+
 /* ------------------------------------------------------------------ footer */
 .footer { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 10.5px; color: #7e93b5; margin-top: 14px; }
 .dot-sep { opacity: 0.5; }
