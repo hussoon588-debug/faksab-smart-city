@@ -74,6 +74,39 @@
 
   <main id="main">
     <section class="view is-active" id="view-city" role="tabpanel" aria-label="المدينة">
+      <div class="card city-card">
+        <div class="card-head">
+          <h2>المدينة</h2>
+          <span class="pill" id="cityMode">—</span>
+        </div>
+        <div class="city-stage" id="cityStage">
+          <canvas id="cityCanvas" aria-hidden="true"></canvas>
+          <div class="city-hud">
+            <div class="city-search">
+              <input id="citySearch" type="search" inputmode="search" autocomplete="off"
+                placeholder="ابحث: OF-014 أو حي الميناء" aria-label="ابحث عن قطعة أو حي" />
+            </div>
+            <div class="city-zoom" role="group" aria-label="تكبير الخريطة">
+              <button type="button" data-action="zoom-in" aria-label="تكبير">+</button>
+              <button type="button" data-action="zoom-out" aria-label="تصغير">−</button>
+              <button type="button" data-action="zoom-reset" aria-label="إعادة ضبط العرض">⟲</button>
+            </div>
+            <canvas id="cityMinimap" width="180" height="96" aria-hidden="true"></canvas>
+          </div>
+          <p class="city-fallback" id="cityFallback" hidden>
+            العرض ثلاثي الأبعاد غير متاح على هذا المتصفح — استخدم شبكة القطع أسفل البطاقة.
+          </p>
+        </div>
+        <div class="city-filters" id="cityFilters" role="group" aria-label="مرشّح القطع"></div>
+        <p class="city-hint" id="cityHint">اسحب للتنقل · قرّب بإصبعين أو بعجلة الفأرة · اضغط قطعة لعرضها</p>
+        <p class="legend">
+          <span><i class="dot dot-free"></i> متاحة</span>
+          <span><i class="dot dot-owned"></i> قطعة لك</span>
+          <span><i class="dot dot-built"></i> أصل مُطوّر</span>
+          <span><i class="dot dot-ready"></i> إيجار جاهز</span>
+        </p>
+      </div>
+
       <div class="card">
         <div class="card-head">
           <h2>أحياء المدينة</h2>
@@ -82,12 +115,6 @@
         <div class="chips" id="districtTabs" role="tablist" aria-label="الأحياء"></div>
         <p class="meta" id="districtMeta">—</p>
         <div class="grid" id="plotGrid"></div>
-        <p class="legend">
-          <span><i class="dot dot-free"></i> متاحة</span>
-          <span><i class="dot dot-owned"></i> قطعة لك</span>
-          <span><i class="dot dot-built"></i> أصل مُطوّر</span>
-          <span><i class="dot dot-ready"></i> إيجار جاهز</span>
-        </p>
       </div>
     </section>
 

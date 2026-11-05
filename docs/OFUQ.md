@@ -40,6 +40,30 @@ All numbers live in `src/config.js` (`ECONOMY`, `LEVELS`, `DISTRICTS`, `ASSET_TY
   coerced into a valid state instead of crashing the app (`tests/ofuq/store.test.mjs`).
 - The DOM smoke test (`tests/ofuq/ui.smoke.test.mjs`) boots the real `index.html` in jsdom and
   walks the whole loop. `jsdom` is the only dev dependency; without it the suite skips.
+- `scene.js` splits the city view in two: `buildCityModel()` is pure (snapshot → positioned
+  plots, tested in Node) and `createCityScene()` takes the `THREE` namespace as an argument, so
+  no test ever needs WebGL. The renderer is loaded with a dynamic `import()` only after
+  `supportsWebGL()` returns true; without WebGL the grid and the 2D minimap stay in charge.
+
+## The city view
+
+The city is a 100-plot scene: five districts of twenty plots, positions derived from the same
+`plotKey` the rest of the app uses.
+
+- Height reads the level (a level-5 asset is a tower), colour reads the asset class, grey means
+  locked, and a green marker means "rent is waiting".
+- Drag pans, wheel or pinch zooms, search accepts `OF-014`, `14`, `harbor`, `حي الميناء` or an
+  asset name, and the filter chips dim — never delete — the plots that do not match.
+- A tap opens the same action sheet as the grid below, so there is exactly one place where a
+  purchase can start.
+- The minimap is plain 2D canvas: it works even when the 3D renderer does not, and it draws the
+  current camera footprint.
+- The scene owns no game state: every frame is derived from a store snapshot, which is why
+  local mode and server mode look identical.
+
+Vendoring: `vendor/three.module.min.js` (r150.1, MIT, 154 KB gzipped) is committed because the
+app ships as plain ES modules with no bundler and must stay offline-capable. See
+`apps/ofuq/vendor/README.md` for the exact provenance and the upgrade procedure.
 
 ## The shared city (server-authoritative mode)
 
@@ -121,4 +145,6 @@ Mirror the existing seam instead of inventing a new one:
 
 - Per-device ↔ account migration (import a local wallet into a signed-in account).
 - Asset-specific upgrade curves instead of one global rate.
-- Realtime "other investors" presence in the city grid.
+- Realtime "other investors" presence in the city: the scene already renders every plot from a
+  snapshot, so presence only needs one more field.
+- A sign-in screen (the adapter supports `signUp`/`signIn`/`restoreSession`; no UI is mounted).

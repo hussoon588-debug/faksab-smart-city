@@ -27,6 +27,16 @@ import {
   upgradeCost,
   weekDaysLeft
 } from './core.js';
+import {
+  CITY_FILTERS,
+  buildCityModel,
+  citySummary,
+  createCityScene,
+  matchPlots,
+  minimapRect,
+  plotLabel,
+  supportsWebGL
+} from './scene.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -42,8 +52,19 @@ const escapeHtml = (value) =>
   String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 
 export function mount(store) {
-  const view = { current: 'city', district: DISTRICTS[0].id, sheetKey: null, settingsOpen: false };
+  const view = {
+    current: 'city',
+    district: DISTRICTS[0].id,
+    sheetKey: null,
+    settingsOpen: false,
+    // City view: `city` is the WebGL scene once (and only if) it exists.
+    filter: 'all',
+    city: null,
+    cityStatus: 'idle',
+    cityModel: null
+  };
   let toastTimer = 0;
+  let searchTimer = 0;
   let resetArmed = false;
 
   /* --------------------------------------------------------------- helpers */
@@ -80,6 +101,7 @@ export function mount(store) {
     const snap = store.snapshot();
     renderHeader(snap);
     renderCity(snap);
+    renderCityMap(snap);
     renderPortfolio(snap);
     renderLeague(snap);
     if (view.sheetKey) renderSheet(snap);
@@ -167,6 +189,155 @@ export function mount(store) {
       );
     }
     $('plotGrid').innerHTML = plots.join('');
+  }
+
+  /* ------------------------------------------------------- the city scene --- */
+
+  const cityModelFor = (snap) => buildCityModel(snap, { filter: view.filter });
+
+  function renderCityFilters() {
+    $('cityFilters').innerHTML = CITY_FILTERS.map(
+      (filter) =>
+        `<button type="button" data-filter="${filter.id}" class="${filter.id === view.filter ? 'is-active' : ''}" aria-pressed="${filter.id === view.filter}">${filter.label}</button>`
+    ).join('');
+  }
+
+  /**
+   * The badge states the truth in every mode: local, waiting for a session, or shared.
+   * It never says "connected" when there is nothing to connect to.
+   */
+  function modeLabel() {
+    if (store.mode !== 'supabase') return 'وضع محلي';
+    return store.remote?.signedIn ? 'مدينة مشتركة' : 'خادم · بحاجة لتسجيل الدخول';
+  }
+
+  function renderCityMap(snap) {
+    const model = cityModelFor(snap);
+    view.cityModel = model;
+    renderCityFilters();
+
+    const summary = citySummary(model);
+    const mapState =
+      view.cityStatus === 'ready' ? '' : view.cityStatus === 'unsupported' ? ' · عرض شبكي' : ' · جارٍ التحميل';
+    const node = $('cityMode');
+    if (node) node.textContent = `${modeLabel()}${mapState}`;
+
+    if (view.city) {
+      view.city.update(model);
+      return;
+    }
+    // Without WebGL the minimap still works: it is plain 2D canvas, and it keeps the
+    // whole city (100 plots) visible on devices that cannot render the 3D view.
+    if (view.cityStatus === 'unsupported') {
+      const minimap = $('cityMinimap');
+      drawMinimapSafe(minimap?.getContext?.('2d') ?? null, model);
+    }
+  }
+
+  function drawMinimapSafe(ctx, model) {
+    if (!ctx) return;
+    try {
+      ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+      for (const entry of model.plots) {
+        const cell = minimapRect(entry, { width: ctx.canvas.width, height: ctx.canvas.height });
+        ctx.fillStyle =
+          entry.state === 'locked'
+            ? 'rgba(120,126,138,0.45)'
+            : entry.state === 'free'
+              ? 'rgba(216,203,178,0.4)'
+              : entry.state === 'owned'
+                ? 'rgba(154,168,139,0.85)'
+                : entry.ready
+                  ? 'rgba(79,214,164,0.95)'
+                  : 'rgba(142,168,202,0.9)';
+        ctx.fillRect(cell.x, cell.y, cell.size, cell.size);
+      }
+    } catch (error) {
+      console.warn('[ofuq] minimap', error);
+    }
+  }
+
+  function markCityUnsupported() {
+    view.cityStatus = 'unsupported';
+    $('cityStage')?.classList.add('is-unsupported');
+    const fallback = $('cityFallback');
+    if (fallback) fallback.hidden = false;
+    const hint = $('cityHint');
+    if (hint) hint.textContent = 'كل الوظائف متاحة من شبكة القطع أدناه.';
+  }
+
+  /** Boots the 3D view. Failure is not fatal: the grid below stays fully usable. */
+  async function initCity() {
+    if (!supportsWebGL(document)) {
+      markCityUnsupported();
+      return renderCityMap(store.snapshot());
+    }
+    try {
+      // Loaded on demand: the 600 KB renderer never blocks first paint, and a device
+      // without WebGL never downloads it.
+      const THREE = await import('../vendor/three.module.min.js');
+      const canvas = $('cityCanvas');
+      if (!canvas) throw new Error('canvas missing');
+      view.city = createCityScene({
+        THREE,
+        canvas,
+        minimap: $('cityMinimap')?.getContext?.('2d') ?? null,
+        model: cityModelFor(store.snapshot()),
+        onSelect: (key) => selectCityPlot(key)
+      });
+      view.cityStatus = 'ready';
+      view.city.focusDistrict(view.district);
+      renderCityMap(store.snapshot());
+    } catch (error) {
+      console.warn('[ofuq] city scene unavailable', error);
+      markCityUnsupported();
+    }
+  }
+
+  /** A tap on a building in the 3D city opens the same sheet as a tap on the grid. */
+  function selectCityPlot(key) {
+    const district = districtFor(String(key).split(':')[0]);
+    const snap = store.snapshot();
+    if (district && snap.level.level < district.unlockLevel && !snap.state.plots[key]) {
+      return act({ ok: false, message: `${district.name} يُفتح في المستوى ${district.unlockLevel}.` });
+    }
+    view.district = district?.id ?? view.district;
+    vibrate(8);
+    render();
+    return openSheet(key);
+  }
+
+  function applySearch(rawQuery) {
+    const query = String(rawQuery ?? '').trim();
+    if (!query) return;
+    const model = view.cityModel ?? cityModelFor(store.snapshot());
+    const district = model.districts.find(
+      (item) => item.id === query.toLowerCase() || item.name === query || item.name.includes(query)
+    );
+    if (district && !/\d/.test(query)) {
+      view.city?.focusDistrict(district.id);
+      return toast(`${district.name} · ${district.owned} قطعة لك`);
+    }
+    const matches = matchPlots(model, query);
+    if (matches.length === 0) return toast('لا توجد قطعة أو حي بهذا الاسم.', 'bad');
+    view.city?.focusPlot(matches[0].key);
+    return toast(matches.length > 1 ? `${plotLabel(matches[0])} · ${matches.length} نتيجة` : plotLabel(matches[0]));
+  }
+
+  function onMinimapTap(event) {
+    const model = view.cityModel;
+    const canvas = event.currentTarget;
+    if (!model || !canvas?.getBoundingClientRect) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = ((event.clientX - rect.left) / Math.max(1, rect.width)) * canvas.width;
+    const y = ((event.clientY - rect.top) / Math.max(1, rect.height)) * canvas.height;
+    const plot = model.plots.find((entry) => {
+      const cell = minimapRect(entry, { width: canvas.width, height: canvas.height });
+      return x >= cell.x && x <= cell.x + cell.size && y >= cell.y && y <= cell.y + cell.size;
+    });
+    if (!plot) return;
+    view.city?.focusPlot(plot.key);
+    toast(plotLabel(plot));
   }
 
   function renderPortfolio(snap) {
@@ -373,10 +544,22 @@ export function mount(store) {
   }
 
   document.addEventListener('click', (event) => {
-    const target = event.target.closest('[data-view],[data-district],[data-plot],[data-claim],[data-action],#collectAll,#settingsBtn,#sheetClose,#settingsClose,#saveName,#hapticsToggle,#resetGame,#scrim');
+    const target = event.target.closest('[data-view],[data-district],[data-plot],[data-claim],[data-action],[data-filter],#collectAll,#settingsBtn,#sheetClose,#settingsClose,#saveName,#hapticsToggle,#resetGame,#scrim');
     if (!target) return;
 
     if (target.dataset.view) return switchView(target.dataset.view);
+
+    if (target.dataset.filter) {
+      view.filter = target.dataset.filter;
+      vibrate(6);
+      return render();
+    }
+
+    if (target.dataset.action?.startsWith('zoom-')) {
+      const zoom = { 'zoom-in': 'zoomIn', 'zoom-out': 'zoomOut', 'zoom-reset': 'reset' }[target.dataset.action];
+      view.city?.[zoom]?.();
+      return undefined;
+    }
 
     if (target.dataset.district) {
       const district = districtFor(target.dataset.district);
@@ -385,6 +568,7 @@ export function mount(store) {
         return act({ ok: false, message: `${district.name} يُفتح في المستوى ${district.unlockLevel}.` });
       }
       view.district = district.id;
+      view.city?.focusDistrict(district.id);
       vibrate(8);
       return render();
     }
@@ -461,6 +645,24 @@ export function mount(store) {
     closeSettings();
   });
 
+  const searchInput = $('citySearch');
+  if (searchInput) {
+    searchInput.addEventListener('input', (event) => {
+      const value = event.target.value;
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => applySearch(value), 200);
+    });
+    searchInput.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      clearTimeout(searchTimer);
+      applySearch(event.target.value);
+    });
+  }
+
+  const minimapNode = $('cityMinimap');
+  if (minimapNode) minimapNode.addEventListener('click', onMinimapTap);
+
   /* ------------------------------------------------------------------ tick */
   // Accrued rent changes continuously; refresh the derived UI without persisting.
   const ticker = setInterval(() => {
@@ -477,11 +679,17 @@ export function mount(store) {
   // Every store mutation re-renders; the UI never holds a stale copy of the state.
   const unsubscribe = store.subscribe(() => render());
   render();
+  // Fire-and-forget: the shell is already interactive before the renderer arrives.
+  initCity();
 
   /** Detach timers/listeners — used by the DOM smoke test. */
   function destroy() {
     clearInterval(ticker);
+    clearTimeout(searchTimer);
     document.removeEventListener('visibilitychange', onVisibility);
+    minimapNode?.removeEventListener('click', onMinimapTap);
+    view.city?.dispose?.();
+    view.city = null;
     unsubscribe();
   }
 
