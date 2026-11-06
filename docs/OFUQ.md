@@ -134,6 +134,22 @@ Two things a player should never have to take on faith:
   of the ledger, never a summary of it, so an exported file always reconciles with the balance.
 
 
+
+## The development plan (v0.10.0)
+
+The portfolio card **خطة التطوير** turns the next decision into arithmetic instead of vibes:
+
+- For every developed plot: the upgrade cost, the rent now, the rent at the next level, the added
+  rent per hour, and **how many hours of that added rent pay the upgrade back**
+  (`ceil(cost / delta)`).
+- Rows are ranked by payback, cheapest first on ties, and each one says whether the wallet covers
+  it and by how much it falls short when it does not.
+- A closing line names the **best purchase currently reachable**: the highest-tier unlocked district
+  the cash affords, cheapest plot inside it. When nothing is reachable it says so instead of
+  suggesting a plot the player cannot buy.
+- Every number comes from `upgradeCost` / `plotRent` — the same functions the store charges with —
+  so the plan and the receipt cannot disagree.
+
 ## Auditing the ledger (v0.9.0)
 
 The wallet card **تدقيق الدفتر** re-does the arithmetic the player could do on paper: rows are
