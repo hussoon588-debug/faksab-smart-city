@@ -756,3 +756,161 @@ export function serverReadiness(facts = {}, now = Date.now()) {
     roundTripMs
   };
 }
+
+/* --------------------------------------------------------------- auditing --- */
+/**
+ * A wallet is only as trustworthy as its ledger. This walks the rows oldest-first and checks
+ * the arithmetic the player can check for themselves: every row must land exactly on the
+ * balance its predecessor left behind, the newest must equal the cash on hand, and no row may
+ * repeat or point at money that never existed.
+ *
+ * It audits the rows in hand — in local mode that is this device's ledger, in server mode it is
+ * the snapshot the server sent. It says nothing about players it cannot see.
+ */
+export function auditLedger(entries = [], cash = 0, { now = Date.now() } = {}) {
+  const rows = (Array.isArray(entries) ? entries : [])
+    .filter((entry) => entry && Number.isFinite(Number(entry.ts)))
+    .slice()
+    .sort((a, b) => Number(a.ts) - Number(b.ts) || Number(a.seq ?? 0) - Number(b.seq ?? 0));
+
+  const issues = [];
+  const seen = new Set();
+
+  for (const row of rows) {
+    const id = String(row.id ?? '');
+    if (id) {
+      if (seen.has(id)) issues.push({ code: 'duplicate', id, message: 'حركة مكرّرة بنفس المعرّف' });
+      seen.add(id);
+    }
+    if (!Number.isFinite(Number(row.amount)) || Number(row.amount) === 0) {
+      issues.push({ code: 'zero', id, message: 'حركة بمبلغ صفري أو غير صالح' });
+    }
+    if (Number.isFinite(Number(row.balanceAfter)) && Number(row.balanceAfter) < 0) {
+      issues.push({ code: 'negative', id, message: 'رصيد سالب بعد الحركة' });
+    }
+  }
+
+  // The chain: the opening row stands on its own, every later row must continue exactly.
+  rows.forEach((row, index) => {
+    const balance = Number(row.balanceAfter);
+    if (!Number.isFinite(balance)) {
+      issues.push({ code: 'missing-balance', id: String(row.id ?? ''), message: 'حركة بلا رصيد بعدها' });
+      return;
+    }
+    if (index === 0) {
+      const opening = ['signup_bonus', 'opening_balance'].includes(row.reason);
+      if (!opening) {
+        issues.push({
+          code: 'opening',
+          id: String(row.id ?? ''),
+          message: 'أول حركة في الدفتر ليست رصيد بداية'
+        });
+      } else if (balance !== Number(row.amount)) {
+        issues.push({
+          code: 'opening',
+          id: String(row.id ?? ''),
+          message: 'رصيد البداية لا يساوي أول حركة',
+          expected: Number(row.amount),
+          actual: balance
+        });
+      }
+      return;
+    }
+    const previous = rows[index - 1];
+    const expected = Number(previous.balanceAfter) + Number(row.amount);
+    if (expected !== balance) {
+      issues.push({
+        code: 'break',
+        id: String(row.id ?? ''),
+        message: 'الرصيد بعد الحركة لا يطابق مجموع ما قبلها',
+        expected,
+        actual: balance,
+        reason: row.reason
+      });
+    }
+  });
+
+  const newest = rows[rows.length - 1] ?? null;
+  if (newest && Number(newest.balanceAfter) !== Number(cash)) {
+    issues.push({
+      code: 'cash',
+      id: String(newest.id ?? ''),
+      message: 'آخر حركة لا تطابق رصيد المحفظة',
+      expected: Number(newest.balanceAfter),
+      actual: Number(cash)
+    });
+  }
+
+  return {
+    ok: issues.length === 0,
+    checked: rows.length,
+    issues,
+    firstAt: rows[0]?.ts ?? null,
+    lastAt: newest?.ts ?? null,
+    spanDays: rows.length > 1 ? Math.max(1, Math.round((Number(newest.ts) - Number(rows[0].ts)) / DAY_MS)) : 0,
+    auditedAt: now
+  };
+}
+
+/* ------------------------------------------------------------------ plans --- */
+/**
+ * The plan is arithmetic, not advice: what the next level costs, how much more rent it pays,
+ * and how many hours of that rent it takes to earn the price back. Every number comes from the
+ * same functions the store charges with, so the plan cannot drift from the wallet.
+ */
+export function upgradePlan(plot, district) {
+  if (!plot?.assetId || !district) return null;
+  const level = clamp(Number(plot.level ?? 0), 1, ECONOMY.maxLevel);
+  const maxed = level >= ECONOMY.maxLevel;
+  const cost = maxed ? 0 : upgradeCost(plot, district);
+  const rentNow = plotRent(plot, district);
+  const rentNext = maxed ? rentNow : plotRent({ ...plot, level: level + 1 }, district);
+  const delta = rentNext - rentNow;
+  return {
+    level,
+    nextLevel: maxed ? level : level + 1,
+    maxed,
+    cost,
+    rentNow,
+    rentNext,
+    delta,
+    // Hours of the *added* rent needed to pay for the upgrade; null when it adds nothing.
+    paybackHours: delta > 0 ? Math.ceil(cost / delta) : null
+  };
+}
+
+/** Every upgrade worth considering, best payback first. */
+export function portfolioPlan(state) {
+  const rows = [];
+  for (const [key, plot] of Object.entries(state.plots ?? {})) {
+    const district = districtFor(plot?.districtId);
+    const plan = upgradePlan(plot, district);
+    if (!plan || plan.maxed) continue;
+    rows.push({ ...plan, key, plot, district, affordable: Number(state.cash ?? 0) >= plan.cost });
+  }
+  return rows.sort((a, b) => (a.paybackHours ?? Infinity) - (b.paybackHours ?? Infinity) || a.cost - b.cost);
+}
+
+/**
+ * The next plot worth buying with the cash on hand: the highest tier the player can unlock
+ * that they can actually afford, cheapest plot first inside that tier.
+ */
+export function bestPurchase(state) {
+  const level = levelInfo(state.xp ?? 0).level;
+  const cash = Number(state.cash ?? 0);
+  const owned = new Set(Object.keys(state.plots ?? {}));
+  const candidates = [];
+  for (const district of DISTRICTS) {
+    if (district.unlockLevel > level) continue;
+    const price = plotPrice(district);
+    if (price > cash) continue;
+    for (let plotNo = 1; plotNo <= district.plots; plotNo += 1) {
+      if (owned.has(plotKey(district.id, plotNo))) continue;
+      candidates.push({ districtId: district.id, district, plotNo, price });
+      break;
+    }
+  }
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => b.district.tier - a.district.tier || a.price - b.price);
+  return candidates[0];
+}

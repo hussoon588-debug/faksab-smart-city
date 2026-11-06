@@ -168,6 +168,14 @@
         <div class="assets" id="assetList"></div>
         <p class="empty" id="emptyPortfolio" hidden>لا توجد أصول بعد. ابدأ بشراء قطعة من تبويب المدينة.</p>
       </div>
+      <div class="card">
+        <div class="card-head">
+          <h2>خطة التطوير</h2>
+          <span class="pill" id="planState">—</span>
+        </div>
+        <div class="market" id="planList"></div>
+        <p class="fineprint" id="planNote">—</p>
+      </div>
       <div class="card" id="leaseCard" hidden>
         <div class="card-head">
           <h2>إيجاراتي</h2>
@@ -188,6 +196,14 @@
           <button class="btn btn-ghost sm" type="button" id="exportCsv">تصدير الحركات CSV</button>
         </div>
         <p class="fineprint">كل حركة في هذا السجل تحمل سببها والرصيد بعدها — مجموعها يفسّر رصيدك بالكامل. التصدير ينسخ نفس السطور بلا إضافات.</p>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <h2>تدقيق الدفتر</h2>
+          <span class="pill" id="auditState">—</span>
+        </div>
+        <div class="health" id="auditList"></div>
+        <p class="fineprint">تدقيق حسابي كامل على السطور التي بين يديك: كل حركة يجب أن تصل بالضبط إلى الرصيد الذي تركته سابقتها، وآخر حركة يجب أن تساوي رصيد المحفظة.</p>
       </div>
     </section>
 

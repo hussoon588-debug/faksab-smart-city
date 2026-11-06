@@ -9,6 +9,8 @@ import { APP, ASSET_TYPES, DISTRICTS, ECONOMY } from './config.js';
 import {
   achievementBoard,
   assetFor,
+  auditLedger,
+  bestPurchase,
   buildLedgerCsv,
   challengeBoard,
   counted,
@@ -43,6 +45,7 @@ import {
   plotPrice,
   plotRent,
   plotValue,
+  portfolioPlan,
   portfolioValue,
   saleProceeds,
   suggestedLeaseFee,
@@ -135,6 +138,8 @@ export function mount(store) {
     renderPortfolio(snap);
     renderLedger(snap);
     renderHealth(snap);
+    renderAudit(snap);
+    renderPlan(snap);
     renderMarket(snap);
     renderMyLeases(snap);
     renderReport(snap);
@@ -826,6 +831,112 @@ export function mount(store) {
     return `<div class="sheet-history"><h3>سجل هذه القطعة</h3><ul>${rows}</ul></div>`;
   }
 
+  /* ---------------------------------------------------------------- plan --- */
+
+  /**
+   * The plan shows the arithmetic of the next step, not a promise: cost, added rent per hour,
+   * and the hours that added rent needs to pay the upgrade back.
+   */
+  function renderPlan(snap) {
+    const list = $('planList');
+    if (!list) return;
+    const { state } = snap;
+    const rows = portfolioPlan(state);
+    const next = bestPurchase(state);
+    const pill = $('planState');
+    const note = $('planNote');
+
+    if (rows.length === 0) {
+      if (pill) pill.textContent = 'لا خطوات';
+      list.innerHTML = '';
+      const owned = Object.values(state.plots ?? {});
+      note.textContent =
+        owned.length === 0
+          ? 'لم تبدأ بعد — اشترِ قطعة من تبويب المدينة ثم طوّرها ليظهر هنا أي استثمار يعيد نفسه أسرع.'
+          : owned.every((plot) => !plot.assetId)
+            ? 'قطعك بلا أصول بعد — طوّر واحدة منها ليظهر هنا ترتيب الترقيات ومدى سرعة استردادها.'
+            : 'كل أصولك في أعلى مستوى — لا ترقية متاحة الآن.';
+      return;
+    }
+
+    if (pill) pill.textContent = `${rows.length} خطوة · أسرعها ${formatCompact(rows[0].paybackHours ?? 0)} ساعة`;
+    list.innerHTML = rows
+      .slice(0, 4)
+      .map((row) => {
+        const hours = row.paybackHours ? `${counted(row.paybackHours, ['ساعة', 'ساعتان', 'ساعات', 'ساعة'])}` : 'لا يزيد الدخل';
+        return `<div class="market-row">
+          <header>
+            <b>${escapeHtml(row.district?.name ?? '')} · قطعة ${row.plot.plotNo}</b>
+            <small>المستوى ${row.level} ← ${row.nextLevel}</small>
+          </header>
+          <div class="market-meta">
+            <span><b>${formatNumber(row.cost)}</b> عملة</span>
+            <span>+${formatNumber(row.delta)}/ساعة (${formatNumber(row.rentNow)} ← ${formatNumber(row.rentNext)})</span>
+            <span class="${row.affordable ? 'good' : 'bad'}">${row.affordable ? 'تكفي سيولتك' : `ينقصك ${formatNumber(row.cost - state.cash)}`}</span>
+            <span>يسترد نفسه في ${hours}</span>
+          </div>
+          <div class="market-actions">
+            <button class="btn btn-ghost sm" type="button" data-action="open-plot" data-plot="${row.key}">فتح القطعة</button>
+          </div>
+        </div>`;
+      })
+      .join('');
+
+    const parts = [];
+    if (next) {
+      parts.push(
+        `أفضل شراء متاح الآن: ${next.district.name} · قطعة ${next.plotNo} بـ ${formatNumber(next.price)} — أفضل سعر في أعلى حي مفتوح لك.`
+      );
+    } else {
+      parts.push('لا قطعة متاحة في حدود سيولتك ومستواك الآن.');
+    }
+    const blocked = rows.filter((row) => !row.affordable).length;
+    if (blocked > 0) parts.push(`${blocked} ترقية تنتظر السيولة.`);
+    note.textContent = parts.join(' ');
+  }
+
+  /* --------------------------------------------------------------- audit --- */
+
+  function renderAudit(snap) {
+    const list = $('auditList');
+    if (!list) return;
+    const report = auditLedger(snap.state.ledger ?? [], snap.state.cash, { now: store.now });
+    const pill = $('auditState');
+    if (pill) pill.textContent = report.checked === 0 ? 'لا حركات' : report.ok ? 'سليم' : `${report.issues.length} ملاحظة`;
+
+    const head = `<div class="health-row ${report.ok ? 'is-ok' : 'is-todo'}">
+      <i aria-hidden="true">${report.ok ? '✓' : '!'}</i>
+      <span><b>${formatNumber(report.checked)} حركة${report.spanDays > 0 ? ` على مدى ${counted(report.spanDays, ['يوم', 'يومان', 'أيام', 'يوماً'])}` : ''}</b>
+      <small>${
+        report.checked === 0
+          ? 'لا يوجد دفتر بعد — أول حركة هي رصيد البداية.'
+          : report.ok
+            ? 'كل سطر يصل إلى الرصيد الذي تركته سابقه، وآخر سطر يساوي رصيد المحفظة.'
+            : 'وُجدت سطور لا تتصل حسابياً — التفاصيل أدناه.'
+      }</small></span>
+    </div>`;
+
+    const rows = report.issues
+      .slice(0, 6)
+      .map(
+        (issue) => `<div class="health-row is-todo">
+          <i aria-hidden="true">•</i>
+          <span><b>${escapeHtml(issue.message)}</b>
+          <small>${escapeHtml(
+            [
+              issue.reason ? ledgerLabel(issue.reason) : '',
+              Number.isFinite(issue.expected) ? `المتوقع ${formatNumber(issue.expected)} · الفعلي ${formatNumber(issue.actual)}` : ''
+            ]
+              .filter(Boolean)
+              .join(' · ') || `مرجع الحركة ${issue.id || '—'}`
+          )}</small></span>
+        </div>`
+      )
+      .join('');
+
+    list.innerHTML = head + rows;
+  }
+
   /* ------------------------------------------------------------ readiness --- */
 
   function renderHealth(snap) {
@@ -1265,6 +1376,7 @@ export function mount(store) {
     if (target.dataset.action === 'list-offer') return handleListOffer();
     if (target.dataset.action === 'accept-lease') return handleAcceptLease(target.dataset.offer);
     if (target.dataset.action === 'list-lease') return handleListLease();
+    if (target.dataset.action === 'open-plot') return openSheet(target.dataset.plot);
     if (target.dataset.action === 'collect-lease') {
       return act(store.dispatch('collectLease', { plotId: target.dataset.plot }), 18);
     }

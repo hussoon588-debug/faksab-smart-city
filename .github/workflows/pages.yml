@@ -1,9 +1,11 @@
 name: Deploy to GitHub Pages
 
-# Manual only: the live site is currently published from the `main` branch root via
-# repository settings. Run this workflow once the Pages source has been switched to
-# "GitHub Actions" (Settings → Pages → Build and deployment → Source).
+# The live site is published from this workflow's `dist` artifact. It used to be manual
+# only, which is exactly how the site went stale for a week while `apps/ofuq` was being
+# built: nobody ran it. It now deploys on every push to `main`, and can still be run by hand.
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
