@@ -133,6 +133,23 @@ Two things a player should never have to take on faith:
   a BOM so Excel reads them, RFC-style quoting for commas and quotes, ISO timestamps. It is a copy
   of the ledger, never a summary of it, so an exported file always reconciles with the balance.
 
+
+## Auditing the ledger (v0.9.0)
+
+The wallet card **تدقيق الدفتر** re-does the arithmetic the player could do on paper: rows are
+sorted oldest-first, and every row must land *exactly* on the balance its predecessor left behind
+(`expected = previous.balanceAfter + amount`). The newest row must equal the cash on hand. It also
+flags a first row that is not an opening balance, a closing balance that is negative, a zero or
+non-numeric amount, a repeated row id, and a first-row balance that does not equal the opening
+amount.
+
+- It audits **the rows in hand** — this device's ledger locally, the server snapshot in server
+  mode. It makes no claim about players it cannot see, and the card says so.
+- Breaking one row anywhere flips the card to «n ملاحظة» with the expected and actual numbers, so
+  a corrupted save or a bad migration is visible instead of silent.
+- The audit and the CSV export read the same rows, so an exported file can be checked against the
+  same rules.
+
 ## The ledger
 
 Money is not a number that changes; it is the sum of movements. Every action that touches the

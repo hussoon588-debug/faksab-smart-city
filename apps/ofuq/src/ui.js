@@ -9,6 +9,7 @@ import { APP, ASSET_TYPES, DISTRICTS, ECONOMY } from './config.js';
 import {
   achievementBoard,
   assetFor,
+  auditLedger,
   buildLedgerCsv,
   challengeBoard,
   counted,
@@ -135,6 +136,7 @@ export function mount(store) {
     renderPortfolio(snap);
     renderLedger(snap);
     renderHealth(snap);
+    renderAudit(snap);
     renderMarket(snap);
     renderMyLeases(snap);
     renderReport(snap);
@@ -824,6 +826,48 @@ export function mount(store) {
       )
       .join('');
     return `<div class="sheet-history"><h3>سجل هذه القطعة</h3><ul>${rows}</ul></div>`;
+  }
+
+  /* --------------------------------------------------------------- audit --- */
+
+  function renderAudit(snap) {
+    const list = $('auditList');
+    if (!list) return;
+    const report = auditLedger(snap.state.ledger ?? [], snap.state.cash, { now: store.now });
+    const pill = $('auditState');
+    if (pill) pill.textContent = report.checked === 0 ? 'لا حركات' : report.ok ? 'سليم' : `${report.issues.length} ملاحظة`;
+
+    const head = `<div class="health-row ${report.ok ? 'is-ok' : 'is-todo'}">
+      <i aria-hidden="true">${report.ok ? '✓' : '!'}</i>
+      <span><b>${formatNumber(report.checked)} حركة${report.spanDays > 0 ? ` على مدى ${counted(report.spanDays, ['يوم', 'يومان', 'أيام', 'يوماً'])}` : ''}</b>
+      <small>${
+        report.checked === 0
+          ? 'لا يوجد دفتر بعد — أول حركة هي رصيد البداية.'
+          : report.ok
+            ? 'كل سطر يصل إلى الرصيد الذي تركته سابقه، وآخر سطر يساوي رصيد المحفظة.'
+            : 'وُجدت سطور لا تتصل حسابياً — التفاصيل أدناه.'
+      }</small></span>
+    </div>`;
+
+    const rows = report.issues
+      .slice(0, 6)
+      .map(
+        (issue) => `<div class="health-row is-todo">
+          <i aria-hidden="true">•</i>
+          <span><b>${escapeHtml(issue.message)}</b>
+          <small>${escapeHtml(
+            [
+              issue.reason ? ledgerLabel(issue.reason) : '',
+              Number.isFinite(issue.expected) ? `المتوقع ${formatNumber(issue.expected)} · الفعلي ${formatNumber(issue.actual)}` : ''
+            ]
+              .filter(Boolean)
+              .join(' · ') || `مرجع الحركة ${issue.id || '—'}`
+          )}</small></span>
+        </div>`
+      )
+      .join('');
+
+    list.innerHTML = head + rows;
   }
 
   /* ------------------------------------------------------------ readiness --- */
